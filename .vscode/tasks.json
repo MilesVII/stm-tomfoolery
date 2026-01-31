@@ -1,0 +1,33 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build",
+			"type": "shell",
+			"command": "arm-none-eabi-gcc",
+			"args": [
+				"--specs=nosys.specs",
+				"-mcpu=cortex-m4",
+				"-mthumb",
+				"-O2",
+				"-I",
+				"src\\cmsis\\include-core",
+				"-I",
+				"src\\cmsis\\include-device",
+				"-I",
+				"src\\cmsis",
+				"-T",
+				"STM32F411CEUX_FLASH.ld",
+				"src/cmsis/startup_stm32f411xe-gcc.s",
+				"src/system_stm32f4xx.c",
+				"src/main.c",
+				"-o",
+				"./bin/firmware.elf"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}
