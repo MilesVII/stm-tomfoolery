@@ -20,6 +20,8 @@
 				"STM32F411CEUX_FLASH.ld",
 				"src/cmsis/startup_stm32f411xe-gcc.s",
 				"src/system_stm32f4xx.c",
+				"src/hal_at_home.c",
+				"src/display.c",
 				"src/main.c",
 				"-o",
 				"./bin/firmware.elf"

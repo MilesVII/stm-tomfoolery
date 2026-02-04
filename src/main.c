@@ -1,32 +1,38 @@
 
 #include "stm32f411xe.h"
-
-void delay_cycles(volatile uint32_t cycles) {
-	while (cycles--) {
-		__NOP();
-	}
-}
+#include "hal_at_home.h"
+#include "display.h"
 
 int main(void) {
-	// enable GPIOC clock
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
+
+	RCC->AHB1ENR |=
+		RCC_AHB1ENR_GPIOAEN |
+		RCC_AHB1ENR_GPIOBEN |
+		RCC_AHB1ENR_GPIOCEN;
 
 	// PC13 led
-	GPIOC->MODER &= ~(3 << (13 * 2));
-	GPIOC->MODER |=  (1 << (13 * 2));
+	MODER(GPIOC, 13, 1)
 
 	// A0 button
-	GPIOA->MODER &= ~(3 << (0 * 2));
-	GPIOA->PUPDR &= ~(3 << (0 * 2));
+	MODER(GPIOA, 13, 1)
 	GPIOA->PUPDR |=  (1 << (0 * 2));
 
+	delay_ms(200);
+	display_initSPI();
+	delay_ms(200);
+	display_init();
+	delay_ms(200);
+	display_clear();
+	delay_ms(200);
+
 	while (1) {
-		delay_cycles(1000000);
+		delay_ms(200);
+		display_update();
 		if (GPIOA->IDR & (1 << 0)) {
-			GPIOC->ODR |= (1 << 13);
-		} else {
 			GPIOC->ODR &= ~(1 << 13);
+		} else {
+			GPIOC->ODR |= (1 << 13);
 		}
 	}
 }
