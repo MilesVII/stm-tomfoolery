@@ -5,31 +5,59 @@
 #define DISPLAY_W  64
 #define DISPLAY_H 128
 
+/*
+320x240
+A5 SCK
+A7 MOSI
+
+B0 D/C
+B1 RESET
+B10 CS
+*/
+
+
+#define SCK_PORT    GPIOA
+#define SCK_PIN     5
+
+#define MOSI_PORT   GPIOA
+#define MOSI_PIN    7
+
+#define NSS_PORT    GPIOB
+#define NSS_PIN     10
+#define NSS_HIGH()  PIN_SET(NSS_PORT, GPIO_PIN(NSS_PIN))
+#define NSS_LOW()   PIN_CLR(NSS_PORT, GPIO_PIN(NSS_PIN))
+
+#define RST_PORT    GPIOB
+#define RST_PIN     1
+#define RST_HIGH()  PIN_SET(RST_PORT, GPIO_PIN(RST_PIN))
+#define RST_LOW()   PIN_CLR(RST_PORT, GPIO_PIN(RST_PIN))
+
+#define DC_PORT     GPIOB
+#define DC_PIN      0
+#define DC_HIGH()   PIN_SET(DC_PORT, GPIO_PIN(DC_PIN))
+#define DC_LOW()    PIN_CLR(DC_PORT, GPIO_PIN(DC_PIN))
+
+#define SPI_PIN_INIT(pin) \
+	MODER(pin##_PORT, pin##_PIN, 2); \
+	AFR(pin##_PORT, pin##_PIN, 5); \
+	OSPEEDR(pin##_PORT, pin##_PIN, 3);
+#define OUT_PIN_INIT(pin) \
+	MODER(pin##_PORT, pin##_PIN, 1); \
+	pin##_HIGH();
+
 void display_initSPI() {
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
-	/*
-	A5 CLK
-	A7 DIN
+	SPI_PIN_INIT(SCK);
+	SPI_PIN_INIT(MOSI);
 
-	B6 CS
-	A8 D/C
-	A1 RES
-	*/
+	OUT_PIN_INIT(NSS);
+	OUT_PIN_INIT(DC);
+	OUT_PIN_INIT(RST);
 
-	// AF mode
-	MODER(GPIOA, 5, 2)
-	MODER(GPIOA, 7, 2)
-
-	MODER(GPIOB, 6, 1)
-	MODER(GPIOA, 8, 1)
-	MODER(GPIOA, 1, 1)
-
-	AFR(GPIOA, 5, 5)
-	AFR(GPIOA, 7, 5)
-
-	// OSPEEDR(GPIOA, 5, 3)
-	// OSPEEDR(GPIOA, 7, 3)
+	// clear
+	SPI1->CR1 = 0;
+	SPI1->CR2 = 0;
 
 	SPI1->CR1 =
 		SPI_CR1_MSTR |
@@ -40,77 +68,59 @@ void display_initSPI() {
 	SPI1->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
 
 	SPI1->CR2 = (7 << 8);
+}
 
-	OLED_CS_1;
-	OLED_DC_1;
-	OLED_RST_1;
+// Simple blocking transmit (1 byte) + receive (full duplex)
+uint8_t SPI1_Transfer(uint8_t data, uint8_t read) {
+	while (!SPI_TXE_READY(SPI1));
 
-	OLED_RST_0;
-	delay_ms(100);
-	OLED_RST_1;
-	delay_ms(100);
+	// Send data
+	SPI1->DR = data;
+
+	// Wait until RX buffer not empty (also ensures transfer finished)
+	while (!SPI_RXNE_READY(SPI1));
+
+	// Read received byte
+	if (read)
+		return (uint8_t) SPI1->DR;
+	else
+		return (uint8_t) 0;
+}
+
+// Blocking transmit array (most common use-case)
+void SPI1_Write(uint8_t *data, uint32_t len)
+{
+	NSS_LOW();
+
+	for (uint32_t i = 0; i < len; i++) {
+		SPI1_Transfer(data[i], 0);
+	}
+
+	// Wait until not busy (important!)
+	while (SPI_BSY(SPI1));
+
+	NSS_HIGH();
+}
+
+void reg(uint8_t command) {
+	DC_LOW();
+	SPI1_Write(&command, 1);
+}
+void byte(uint8_t byte) {
+	DC_HIGH();
+	SPI1_Write(&byte, 1);
 }
 
 static void display_reset(void) {
-	OLED_RST_1;
-	delay_ms(100);
-	OLED_RST_0;
-	delay_ms(100);
-	OLED_RST_1;
-	delay_ms(100);
-}
-
-static void display_spi4wByte(uint8_t value) {
-	SPI1->CR2 |= (1) << 12;
-	while (!(SPI1->SR & SPI_SR_TXE));
-	
-	*((__IO uint8_t *)(&SPI1->DR)) = value;
-	while (SPI1->SR & SPI_SR_BSY);
-	// while (!(SPI1->SR & SPI_SR_RXNE));
-	// return *((__IO uint8_t *)(&SPI1->DR));
-}
-
-static void display_writeReg(uint8_t Reg) {
-	OLED_DC_0;
-	OLED_CS_0;
-	display_spi4wByte(Reg);
-	OLED_CS_1;
-}
-
-static void display_writeData(uint8_t Data) {
-	OLED_DC_1;
-	OLED_CS_0;
-	display_spi4wByte(Data);
-	OLED_CS_1;
+	// OLED_RST_1;
+	// delay_ms(100);
+	// OLED_RST_0;
+	// delay_ms(100);
+	// OLED_RST_1;
+	// delay_ms(100);
 }
 
 static void display_regInit(void) {
-	display_writeReg(0xAE);//--turn off oled panel
-
-	display_writeReg(0x02);//---set low column address
-	display_writeReg(0x10);//---set high column address
-
-	display_writeReg(0x40);//--set start line address  Set Mapping RAM Display Start Line (0x00~0x3F)
-	display_writeReg(0x81);//--set contrast control register
-	display_writeReg(0xA0);//--Set SEG/Column Mapping a0/a1
-	display_writeReg(0xC0);//Set COM/Row Scan Direction
-	display_writeReg(0xA6);//--set normal display a6/a7
-	display_writeReg(0xA8);//--set multiplex ratio(1 to 64)
-	display_writeReg(0x3F);//--1/64 duty
-	display_writeReg(0xD3);//-set display offset    Shift Mapping RAM Counter (0x00~0x3F)
-	display_writeReg(0x00);//-not offset
-	display_writeReg(0xd5);//--set display clock divide ratio/oscillator frequency
-	display_writeReg(0x80);//--set divide ratio, Set Clock as 100 Frames/Sec
-	display_writeReg(0xD9);//--set pre-charge period
-	display_writeReg(0xF1);//Set Pre-Charge as 15 Clocks & Discharge as 1 Clock
-	display_writeReg(0xDA);//--set com pins hardware configuration
-	display_writeReg(0x12);
-	display_writeReg(0xDB);//--set vcomh
-	display_writeReg(0x40);//Set VCOM Deselect Level
-	display_writeReg(0x20);//-Set Page Addressing Mode (0x00/0x01/0x02)
-	display_writeReg(0x02);//
-	display_writeReg(0xA4);// Disable Entire Display On (0xa4/0xa5)
-	display_writeReg(0xA6);// Disable Inverse Display On (0xa6/a7)
 }
 
 void display_init() {
@@ -125,41 +135,3 @@ void display_init() {
 	display_writeReg(0xaf);
 }
 
-void display_clear() {
-	// UWORD Width, Height;
-	UWORD i, j;
-	// Width = (OLED_1IN3_WIDTH % 8 == 0)? (OLED_1IN3_WIDTH / 8 ): (OLED_1IN3_WIDTH / 8 + 1);
-	// Height = OLED_1IN3_HEIGHT;
-	for (i=0; i<8; i++) {
-		/* set page address */
-		display_writeReg(0xB0 + i);
-		/* set low column address */
-		display_writeReg(0x02);
-		/* set high column address */
-		display_writeReg(0x10);
-		for(j=0; j<128; j++) {
-			/* write data */
-			display_writeData(0x00);
-		}
-	}
-}
-
-void display_update(/*const UBYTE *Image*/) {
-	UWORD page, column, temp;
-
-	for (page=0; page<8; page++) {
-		/* set page address */
-		display_writeReg(0xB0 + page);
-		/* set low column address */
-		display_writeReg(0x02);
-		/* set high column address */
-		display_writeReg(0x10);
-
-		/* write data */
-		for(column=0; column<128; column++) {
-			// temp = Image[(7-page) + column*8];
-			// display_writeData(temp);
-			display_writeData(0xF0F0);
-		}
-	}
-}

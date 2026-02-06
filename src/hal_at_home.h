@@ -3,37 +3,27 @@
 #include "stm32f411xe.h"
 #include <stdint.h>
 
-#define PIN_SET(port, pin)   ((port)->BSRR = (pin))
-#define PIN_CLR(port, pin)   ((port)->BSRR = ((pin) << 16))
+#define PIN_SET(port, pin) ((port)->BSRR = (pin))
+#define PIN_CLR(port, pin) ((port)->BSRR = ((pin) << 16))
 
-#define MODER(PORT, PIN, MODE) \
-	PORT->MODER &= ~(   3 << (PIN * 2)); \
-	PORT->MODER |=  (MODE << (PIN * 2));
+#define _POW2_1 2
+#define _POW2_2 4
+#define _POW2_3 8
+#define _POW2_4 16
+#define _POW2_5 32
+#define _POW2(v) _POW2_##v
+#define BIT_ASSIGN(l, offset, size, value)\
+	l &= ~((_POW2(size) - 1) << (offset * size)); \
+	l |=  (            value << (offset * size));
 
-#define AFR(PORT, PIN, MODE) \
-	PORT->AFR[0] &= ~( 0xF << (PIN * 4)); \
-	PORT->AFR[0] |=  (MODE << (PIN * 4));
+#define MODER(port, pin, mode)   BIT_ASSIGN(port->MODER  , pin, 2, mode)
+#define AFR(port, pin, mode)     BIT_ASSIGN(port->AFR[0] , pin, 4, mode)
+#define OSPEEDR(port, pin, mode) BIT_ASSIGN(port->OSPEEDR, pin, 2, mode)
 
-#define OSPEEDR(PORT, PIN, MODE) \
-	PORT->OSPEEDR &= ~(   3 << (PIN * 2)); \
-	PORT->OSPEEDR |=  (MODE << (PIN * 2));
+#define GPIO_PIN(v)  ((uint16_t)(1 << v))
 
-#define GPIO_PIN_0   ((uint16_t)0x0001)
-#define GPIO_PIN_1   ((uint16_t)0x0002)
-#define GPIO_PIN_2   ((uint16_t)0x0004)
-#define GPIO_PIN_3   ((uint16_t)0x0008)
-#define GPIO_PIN_4   ((uint16_t)0x0010)
-#define GPIO_PIN_5   ((uint16_t)0x0020)
-#define GPIO_PIN_6   ((uint16_t)0x0040)
-#define GPIO_PIN_7   ((uint16_t)0x0080)
-#define GPIO_PIN_8   ((uint16_t)0x0100)
-#define GPIO_PIN_9   ((uint16_t)0x0200)
-#define GPIO_PIN_10  ((uint16_t)0x0400)
-#define GPIO_PIN_11  ((uint16_t)0x0800)
-#define GPIO_PIN_12  ((uint16_t)0x1000)
-#define GPIO_PIN_13  ((uint16_t)0x2000)
-#define GPIO_PIN_14  ((uint16_t)0x4000)
-#define GPIO_PIN_15  ((uint16_t)0x8000)
-#define GPIO_PIN_All ((uint16_t)0xFFFF)
+#define SPI_TXE_READY(spi)  (((spi)->SR & SPI_SR_TXE)  != 0)
+#define SPI_RXNE_READY(spi) (((spi)->SR & SPI_SR_RXNE) != 0)
+#define SPI_BSY(spi)        (((spi)->SR & SPI_SR_BSY)  != 0)
 
 void delay_ms(uint32_t ms);
