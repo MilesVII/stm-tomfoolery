@@ -2,6 +2,7 @@
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "display.h"
+#include "badapol.h"
 
 int main(void) {
 	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
@@ -22,17 +23,39 @@ int main(void) {
 	display_initSPI();
 	delay_ms(200);
 	display_init();
-	delay_ms(200);
+	delay_ms(500);
 	display_clear();
 	delay_ms(200);
 
+	uint8_t pstate = 0;
+	uint8_t click = 0;
+	int clickCounter = 0;
+	int frame = 0;
+
 	while (1) {
-		delay_ms(200);
-		display_update();
+		delay_ms(32);
+		click = 0;
 		if (GPIOA->IDR & (1 << 0)) {
-			GPIOC->ODR &= ~(1 << 13);
-		} else {
+			// butt down
+			// led high
 			GPIOC->ODR |= (1 << 13);
+			if (pstate == 0) click = 1;
+			pstate = 1;
+		} else {
+			// butt up
+			// led low
+			GPIOC->ODR &= ~(1 << 13);
+			pstate = 0;
+		}
+
+		if (click) {
+			++clickCounter;
+		}
+		if (clickCounter < 2) continue;
+
+		display_update_48_32(frameData + frame * BYTES_PER_FRAME);
+		if (++frame >= FRAME_COUNT) {
+			frame = 0;
 		}
 	}
 }

@@ -6,4 +6,5 @@
 void display_initSPI(void);
 void display_init(void);
 void display_clear(void);
-void display_update(/*const UBYTE *Image*/);
+void display_update(uint8_t page);
+void display_update_48_32(uint8_t* frame);

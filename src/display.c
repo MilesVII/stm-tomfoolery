@@ -23,17 +23,17 @@ B10 CS
 #define MOSI_PIN    7
 
 #define NSS_PORT    GPIOB
-#define NSS_PIN     10
+#define NSS_PIN     6
 #define NSS_HIGH()  PIN_SET(NSS_PORT, GPIO_PIN(NSS_PIN))
 #define NSS_LOW()   PIN_CLR(NSS_PORT, GPIO_PIN(NSS_PIN))
 
-#define RST_PORT    GPIOB
-#define RST_PIN     1
+#define RST_PORT    GPIOA
+#define RST_PIN     9
 #define RST_HIGH()  PIN_SET(RST_PORT, GPIO_PIN(RST_PIN))
 #define RST_LOW()   PIN_CLR(RST_PORT, GPIO_PIN(RST_PIN))
 
-#define DC_PORT     GPIOB
-#define DC_PIN      0
+#define DC_PORT     GPIOA
+#define DC_PIN      8
 #define DC_HIGH()   PIN_SET(DC_PORT, GPIO_PIN(DC_PIN))
 #define DC_LOW()    PIN_CLR(DC_PORT, GPIO_PIN(DC_PIN))
 
@@ -71,7 +71,7 @@ void display_initSPI() {
 }
 
 // Simple blocking transmit (1 byte) + receive (full duplex)
-uint8_t SPI1_Transfer(uint8_t data, uint8_t read) {
+static uint8_t SPI1_Transfer(uint8_t data, uint8_t read) {
 	while (!SPI_TXE_READY(SPI1));
 
 	// Send data
@@ -88,8 +88,7 @@ uint8_t SPI1_Transfer(uint8_t data, uint8_t read) {
 }
 
 // Blocking transmit array (most common use-case)
-void SPI1_Write(uint8_t *data, uint32_t len)
-{
+static void SPI1_Write(uint8_t *data, uint32_t len) {
 	NSS_LOW();
 
 	for (uint32_t i = 0; i < len; i++) {
@@ -102,25 +101,51 @@ void SPI1_Write(uint8_t *data, uint32_t len)
 	NSS_HIGH();
 }
 
-void reg(uint8_t command) {
+static void reg(uint8_t command) {
 	DC_LOW();
 	SPI1_Write(&command, 1);
 }
-void byte(uint8_t byte) {
+static void data(uint8_t byte) {
 	DC_HIGH();
 	SPI1_Write(&byte, 1);
 }
 
 static void display_reset(void) {
-	// OLED_RST_1;
-	// delay_ms(100);
-	// OLED_RST_0;
-	// delay_ms(100);
-	// OLED_RST_1;
-	// delay_ms(100);
+	RST_HIGH();
+	delay_ms(100);
+	RST_LOW();
+	delay_ms(100);
+	RST_HIGH();
+	delay_ms(100);
 }
 
 static void display_regInit(void) {
+	reg(0xAE); //--turn off oled panel
+
+	reg(0x02); //---set low column address
+	reg(0x10); //---set high column address
+
+	reg(0x40); //--set start line address  Set Mapping RAM Display Start Line (0x00~0x3F)
+	reg(0x81); //--set contrast control register
+	reg(0xA0); //--Set SEG/Column Mapping a0/a1
+	reg(0xC0); //Set COM/Row Scan Direction
+	reg(0xA6); //--set normal display a6/a7
+	reg(0xA8); //--set multiplex ratio(1 to 64)
+	reg(0x3F); //--1/64 duty
+	reg(0xD3); //-set display offset    Shift Mapping RAM Counter (0x00~0x3F)
+	reg(0x00); //-not offset
+	reg(0xd5); //--set display clock divide ratio/oscillator frequency
+	reg(0x80); //--set divide ratio, Set Clock as 100 Frames/Sec
+	reg(0xD9); //--set pre-charge period
+	reg(0xF1); //Set Pre-Charge as 15 Clocks & Discharge as 1 Clock
+	reg(0xDA); //--set com pins hardware configuration
+	reg(0x12);
+	reg(0xDB); //--set vcomh
+	reg(0x40); //Set VCOM Deselect Level
+	reg(0x20); //-Set Page Addressing Mode (0x00/0x01/0x02)
+	reg(0x02); //
+	reg(0xA4); // Disable Entire Display On (0xa4/0xa5)
+	reg(0xA6); // Disable Inverse Display On (0xa6/a7)
 }
 
 void display_init() {
@@ -132,6 +157,78 @@ void display_init() {
 	delay_ms(200);
 
 	//Turn on the OLED display
-	display_writeReg(0xaf);
+	reg(0xaf);
 }
 
+void display_clear(void) {
+	// UWORD Width, Height;
+	uint16_t i, j;
+	// Width = (OLED_1IN3_WIDTH % 8 == 0)? (OLED_1IN3_WIDTH / 8 ): (OLED_1IN3_WIDTH / 8 + 1);
+	// Height = OLED_1IN3_HEIGHT;
+	for (i = 0; i < 8; ++i) {
+		/* set page address */
+		reg(0xB0 + i);
+		/* set low column address */
+		reg(0x02);
+		/* set high column address */
+		reg(0x10);
+		for(j = 0; j < 128; j++) {
+			/* write data */
+			data(0x00);
+		}
+	}
+}
+
+void display_update(uint8_t targetPage) {
+	uint16_t page, row, temp;
+
+	for (page = 0; page < 8; ++page) {
+		/* set page address */
+		reg(0xB0 + page);
+		/* set low column address */
+		reg(0x02);
+		/* set high column address */
+		reg(0x10);
+
+		/* write data */
+		for(row = 0; row < 128; ++row) {
+			if (page == targetPage && (row / 8 == targetPage)) {
+				data(0xFF);
+			} else {
+				data(0x00);
+			}
+			// temp = 0xF0; //Image[(7-page) + column*8];
+		}
+	}
+};
+
+void display_update_48_32(uint8_t* frame) {
+	uint16_t page, row, x, y;
+
+	/*
+	[row2]
+	[row1]
+	[row0]
+	x [p0] [p1] [p2] etc
+	*/
+	for (page = 0; page < DISPLAY_W / 8; ++page) {
+		/* set page address */
+		reg(0xB0 + page);
+		/* set low column address */
+		reg(0x02);
+		/* set high column address */
+		reg(0x10);
+
+		/* write data */
+		for(row = 0; row < DISPLAY_H; ++row) {
+			if (row < 48 || row >= 80 || page == 0 || page == 7) {
+				data(0x00);
+			} else {
+				y = row - 48;
+				x = page - 1;
+				// actually just it's the same as reading bytes in direct order
+				data(frame[x * 32 + y]);
+			}
+		}
+	}
+};

@@ -1,1 +1,0 @@
-arm-none-eabi-objcopy -O binary ./bin/firmware.elf ./bin/firmware.bin
