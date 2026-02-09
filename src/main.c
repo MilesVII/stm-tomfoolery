@@ -53,7 +53,7 @@ int main(void) {
 		}
 		if (clickCounter < 2) continue;
 
-		display_update_48_32(frameData + frame * BYTES_PER_FRAME);
+		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame);
 		if (++frame >= FRAME_COUNT) {
 			frame = 0;
 		}

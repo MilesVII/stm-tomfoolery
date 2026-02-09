@@ -1,6 +1,8 @@
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "display.h"
+#include "font.h"
+#include <math.h>
 
 #define DISPLAY_W  64
 #define DISPLAY_H 128
@@ -200,9 +202,21 @@ void display_update(uint8_t targetPage) {
 			// temp = 0xF0; //Image[(7-page) + column*8];
 		}
 	}
-};
+}
 
-void display_update_48_32(uint8_t* frame) {
+#define PAGE_CAP (DISPLAY_W / 8)
+#define CHAR_CAP 10 // PAGE_CAP * 2;
+static uint8_t drawChar(uint16_t page, uint16_t row, uint32_t status) {
+	int exp = CHAR_CAP / 2 - 1 - page;
+	if (exp < 0) return 0;
+
+	uint32_t rightTrim = pow(100, exp);
+	uint16_t hundreds = (status / rightTrim) % 100;
+	uint8_t high = hundreds / 10;
+	uint8_t low =  hundreds % 10;
+	return (CHARACTERS[low][row] << 4) | (CHARACTERS[high][row]);
+}
+void display_update_48_32(uint8_t* frame, uint32_t status) {
 	uint16_t page, row, x, y;
 
 	/*
@@ -211,7 +225,7 @@ void display_update_48_32(uint8_t* frame) {
 	[row0]
 	x [p0] [p1] [p2] etc
 	*/
-	for (page = 0; page < DISPLAY_W / 8; ++page) {
+	for (page = 0; page < PAGE_CAP; ++page) {
 		/* set page address */
 		reg(0xB0 + page);
 		/* set low column address */
@@ -222,7 +236,11 @@ void display_update_48_32(uint8_t* frame) {
 		/* write data */
 		for(row = 0; row < DISPLAY_H; ++row) {
 			if (row < 48 || row >= 80 || page == 0 || page == 7) {
-				data(0x00);
+				if (row < 7) {
+					data(drawChar(page, row, status));
+				} else {
+					data(0x00);
+				}
 			} else {
 				y = row - 48;
 				x = page - 1;
@@ -231,4 +249,4 @@ void display_update_48_32(uint8_t* frame) {
 			}
 		}
 	}
-};
+}
