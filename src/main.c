@@ -2,6 +2,7 @@
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "display.h"
+#include "thermal.h"
 #include "badapol.h"
 
 int main(void) {
@@ -26,9 +27,11 @@ int main(void) {
 	delay_ms(500);
 	display_clear();
 	delay_ms(200);
+	thermal_initI2C();
 
 	uint8_t pstate = 0;
 	uint8_t click = 0;
+	uint16_t temp = 0;
 	int clickCounter = 0;
 	int frame = 0;
 
@@ -50,10 +53,10 @@ int main(void) {
 
 		if (click) {
 			++clickCounter;
+			temp = thermal_poll() / 50;
 		}
-		if (clickCounter < 2) continue;
 
-		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame);
+		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame, temp);
 		if (++frame >= FRAME_COUNT) {
 			frame = 0;
 		}

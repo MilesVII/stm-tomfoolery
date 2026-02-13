@@ -8,7 +8,7 @@
 #define DISPLAY_H 128
 
 /*
-320x240
+64x128
 A5 SCK
 A7 MOSI
 
@@ -25,7 +25,7 @@ B10 CS
 #define MOSI_PIN    7
 
 #define NSS_PORT    GPIOB
-#define NSS_PIN     6
+#define NSS_PIN     5
 #define NSS_HIGH()  PIN_SET(NSS_PORT, GPIO_PIN(NSS_PIN))
 #define NSS_LOW()   PIN_CLR(NSS_PORT, GPIO_PIN(NSS_PIN))
 
@@ -41,7 +41,7 @@ B10 CS
 
 #define SPI_PIN_INIT(pin) \
 	MODER(pin##_PORT, pin##_PIN, 2); \
-	AFR(pin##_PORT, pin##_PIN, 5); \
+	AFR(pin##_PORT, pin##_PIN, 0, 5); \
 	OSPEEDR(pin##_PORT, pin##_PIN, 3);
 #define OUT_PIN_INIT(pin) \
 	MODER(pin##_PORT, pin##_PIN, 1); \
@@ -216,7 +216,7 @@ static uint8_t drawChar(uint16_t page, uint16_t row, uint32_t status) {
 	uint8_t low =  hundreds % 10;
 	return (CHARACTERS[low][row] << 4) | (CHARACTERS[high][row]);
 }
-void display_update_48_32(uint8_t* frame, uint32_t status) {
+void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 	uint16_t page, row, x, y;
 
 	/*
@@ -237,7 +237,9 @@ void display_update_48_32(uint8_t* frame, uint32_t status) {
 		for(row = 0; row < DISPLAY_H; ++row) {
 			if (row < 48 || row >= 80 || page == 0 || page == 7) {
 				if (row < 7) {
-					data(drawChar(page, row, status));
+					data(drawChar(page, row, status0));
+				} else if (row < 14) {
+					data(drawChar(page, row - 7, status1));
 				} else {
 					data(0x00);
 				}
