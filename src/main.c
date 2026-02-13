@@ -44,7 +44,7 @@ int main(void) {
 			// butt down
 			// led high
 			GPIOC->ODR |= (1 << 13);
-			temp = thermal_poll() / 50;
+			temp = thermal_poll() * 2;
 			if (pstate == 0) click = 1;
 		} else {
 			// butt up
@@ -56,7 +56,7 @@ int main(void) {
 			++clickCounter;
 		}
 
-		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame, temp - 273);
+		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame, temp - 27315);
 		if (++frame >= FRAME_COUNT) {
 			frame = 0;
 		}
