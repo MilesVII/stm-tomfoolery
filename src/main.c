@@ -17,7 +17,7 @@ int main(void) {
 	MODER(GPIOC, 13, 1)
 
 	// A0 button
-	MODER(GPIOA, 13, 1)
+	// MODER(GPIOA, 13, 1)
 	GPIOA->PUPDR |=  (1 << (0 * 2));
 
 	delay_ms(200);
@@ -38,25 +38,25 @@ int main(void) {
 	while (1) {
 		delay_ms(32);
 		click = 0;
-		if (GPIOA->IDR & (1 << 0)) {
+
+		pstate = GPIOA->IDR & (1 << 0);
+		if (pstate) {
 			// butt down
 			// led high
 			GPIOC->ODR |= (1 << 13);
+			temp = thermal_poll() / 50;
 			if (pstate == 0) click = 1;
-			pstate = 1;
 		} else {
 			// butt up
 			// led low
 			GPIOC->ODR &= ~(1 << 13);
-			pstate = 0;
 		}
 
 		if (click) {
 			++clickCounter;
-			temp = thermal_poll() / 50;
 		}
 
-		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame, temp);
+		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame, temp - 273);
 		if (++frame >= FRAME_COUNT) {
 			frame = 0;
 		}
