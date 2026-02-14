@@ -5,6 +5,58 @@
 #include "thermal.h"
 #include "badapol.h"
 
+uint8_t frame0[BYTES_PER_FRAME];
+uint8_t frame1[BYTES_PER_FRAME];
+// write destination frame
+uint8_t activeFrame = 0;
+// flag indicating the NEXT_FRAME was filled
+uint8_t frameSwitch = 0;
+#define NEXT_FRAME (activeFrame ? 0 : 1)
+
+uint32_t frameCursor = 0;
+uint8_t pushByte(uint8_t value) {
+	if (activeFrame == 0)
+		frame0[frameCursor] = value;
+	else
+		frame1[frameCursor] = value;
+	++frameCursor;
+
+	if (frameCursor >= BYTES_PER_FRAME) {
+		frameCursor = 0;
+		activeFrame = NEXT_FRAME;
+		frameSwitch = 1;
+	}
+}
+
+uint32_t rleCursor = 0;
+uint8_t* readFrame(int* frameCounter) {
+	while (1) {
+		uint8_t byte = rleData[rleCursor];
+		if (byte == RLE_MARK) {
+			uint8_t value = rleData[rleCursor + 1];
+			uint8_t seq   = rleData[rleCursor + 2];
+			for (int i = 0; i < seq; ++i) {
+				pushByte(value);
+			}
+			rleCursor += 3;
+		} else {
+			pushByte(byte);
+			rleCursor += 1;
+		}
+
+		rleCursor %= RLE_LENGTH;
+
+		if (frameSwitch) {
+			if (rleCursor == 0) 
+				*frameCounter = 0;
+			else
+				*frameCounter += 1;
+			frameSwitch = 0;
+			return NEXT_FRAME ? frame1 : frame0;
+		}
+	}
+}
+
 int main(void) {
 	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
 
@@ -55,10 +107,7 @@ int main(void) {
 		if (click) {
 			++clickCounter;
 		}
-
-		display_update_48_32(frameData + frame * BYTES_PER_FRAME, frame, temp - 27315);
-		if (++frame >= FRAME_COUNT) {
-			frame = 0;
-		}
+		uint8_t* frameData = readFrame(&frame);
+		display_update_48_32(frameData, frame, temp - 27315);
 	}
 }

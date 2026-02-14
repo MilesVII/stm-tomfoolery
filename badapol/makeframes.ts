@@ -53,7 +53,7 @@ async function main() {
 			pixels.push(data.pixels[i * data.channels] > 0);
 		}
 
-		if (ix > 420) break;
+		// if (ix > 420) break;
 		for (let page = 0; page < w / 8; ++page)
 		for (let row = 0; row < h; ++row) {
 			
@@ -66,6 +66,26 @@ async function main() {
 			bytes.push(bits);
 		}
 	}
-	await Bun.write(`${bytes.length}.txt`, bytes.map(b => "0x" + b.toString(16)).join(","));
-	return;
+	const saveBytes = (name: string, src: number[]) => Bun.write(name, src.map(b => "0x" + b.toString(16)).join(","));
+
+	await saveBytes(`${bytes.length}.txt`, bytes);
+
+	const MARK = 0xFE;
+	const rle: number[] = [];
+	ix = 0;
+	while (ix < bytes.length) {
+		const cursor = bytes[ix];
+		let seq = 1;
+		for (; seq < 255; ++seq) {
+			if (cursor !== bytes[ix + seq]) break;
+		}
+		if (seq > 1 || cursor === MARK) {
+			rle.push(MARK, cursor, seq);
+		} else {
+			rle.push(cursor);
+		}
+		ix += seq;
+	}
+
+	await saveBytes("rle.txt", rle);
 }
