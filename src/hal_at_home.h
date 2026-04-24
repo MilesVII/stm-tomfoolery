@@ -17,8 +17,7 @@
 	l |=  (            value << (offset * size));
 
 #define MODER(port, pin, mode)      BIT_ASSIGN(port->MODER  , pin, 2, mode)
-// pins 0-7 only
-#define AFR(port, pin, range, mode) BIT_ASSIGN(port->AFR[range], pin, 4, mode) // todo range
+#define AFR(port, pin, mode)        BIT_ASSIGN(port->AFR[pin < 8 ? 0 : 1], pin % 8, 4, mode)
 #define OSPEEDR(port, pin, mode)    BIT_ASSIGN(port->OSPEEDR, pin, 2, mode)
 #define OTYPER(port, pin, mode)     BIT_ASSIGN(port->OTYPER,  pin, 1, mode)
 
