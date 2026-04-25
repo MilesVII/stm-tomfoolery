@@ -20,6 +20,7 @@
 #define AFR(port, pin, mode)        BIT_ASSIGN(port->AFR[pin < 8 ? 0 : 1], pin % 8, 4, mode)
 #define OSPEEDR(port, pin, mode)    BIT_ASSIGN(port->OSPEEDR, pin, 2, mode)
 #define OTYPER(port, pin, mode)     BIT_ASSIGN(port->OTYPER,  pin, 1, mode)
+#define PUPDR(port, pin, mode)      BIT_ASSIGN(port->PUPDR,   pin, 2, mode)
 
 #define GPIO_PIN(v)  ((uint16_t)(1 << v))
 

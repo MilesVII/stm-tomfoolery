@@ -10,3 +10,4 @@ uint32_t display_setWindow(
 	uint16_t w, uint16_t h
 );
 void display_sendBytes(uint16_t* pixels, uint32_t pixelCount);
+void display_clear(uint8_t halfColor);
