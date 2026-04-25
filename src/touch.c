@@ -50,10 +50,10 @@ void touch_initSPI() {
 		SPI_CR1_MSTR |
 		SPI_CR1_SSI  |
 		SPI_CR1_SSM  |
-		SPI_CR1_BR_2;
+		SPI_CR1_BR_1 | SPI_CR1_BR_2;
 	SPI->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
 
-	SPI->CR2 = (7 << 8);
+	// SPI->CR2 = (7 << 8);
 	
 	SPI->CR1 |= SPI_CR1_SPE;
 }
@@ -79,6 +79,9 @@ static uint16_t SPI_Sub(uint8_t data) {
 }
 
 uint32_t touch_poll() {
+	(void)SPI->DR;
+	(void)SPI->SR;
+
 	NSS_LOW();
 
 	uint16_t x = SPI_Sub(CTRL_X);

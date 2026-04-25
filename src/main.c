@@ -16,6 +16,14 @@ void ledOn() {
 	GPIOC->ODR &= ~(1 << 13);
 }
 
+void status(uint16_t color) {
+	uint32_t pc = display_setWindow(0, 0, 10, 10);
+	for (int i = 0; i < pc; ++i) {
+		GFX[i] = color;
+	}
+	display_sendBytes(GFX, pc);
+}
+
 const uint16_t COL_R = 0b1111100000000000;
 const uint16_t COL_G = 0b0000011111100000;
 const uint16_t COL_B = 0b0000000000011111;
@@ -39,6 +47,7 @@ int main(void) {
 	display_initSPI();
 	delay_ms(200);
 	display_init();
+	touch_initSPI();
 
 	display_clear(0x00);
 
@@ -78,36 +87,34 @@ int main(void) {
 	display_sendBytes(GFX + offset, pixelCount);
 	offset += pixelCount;
 
-	// uint32_t pc = display_setWindow(120, 160, 120, 160);
-	// 	for (int i = 0; i < pc; ++i) {
-	// 	GFX[i] = (i % 7 == 1) ? (COL_R | COL_B) : 0;
-	// }
-	// display_sendBytes(GFX, pc);
-
+	uint8_t cycles = 0;
 	while (1) {
 		delay_ms(32);
+		cycles = (cycles + 1) % 32;
+		if (cycles == 0 || cycles == 16) {
+			status(cycles ? 0xFFFF : FLIP16(COL_B));
+		}
 
 		uint8_t button = !GPIOA->IDR & (1 << 0);
 		uint8_t touch = !touch_up();
-		if (touch || button) {
+		if (button || touch) {
 			ledOn();
 			if (touch) {
 				uint32_t point = touch_poll();
-				// uint16_t x = point >> 16;
-				// uint16_t y = point & 0xFFFF;
-				// uint16_t color = COL_G;
-				// uint8_t flyoff = x > 200 || y > 200;
-				// if (flyoff) {
-					// x = 120;
-					// y = 120;
-				// 	color = COL_R;
-				// }
-				// display_setWindow(x, y, 2, 2);
-				// GFX[0] = color;
-				// GFX[1] = color;
-				// GFX[2] = color;
-				// GFX[3] = color;
-				// display_sendBytes(GFX, 4);
+				uint16_t x = point >> 16;
+				uint16_t y = point & 0xFFFF;
+				uint16_t color = COL_G;
+				uint8_t flyoff = x > 200 || y > 200;
+				if (flyoff) {
+					status(x ^ y);
+				} else {
+					display_setWindow(x, y, 2, 2);
+					GFX[0] = color;
+					GFX[1] = color;
+					GFX[2] = color;
+					GFX[3] = color;
+					display_sendBytes(GFX, 4);
+				}
 			}
 		} else {
 			ledOff();

@@ -68,7 +68,7 @@ void display_initSPI() {
 		0; //BR /2
 	SPI->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
 
-	SPI->CR2 = (7 << 8);
+	// SPI->CR2 = (7 << 8);
 	
 	SPI->CR1 |= SPI_CR1_SPE;
 }
