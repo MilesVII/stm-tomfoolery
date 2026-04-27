@@ -1,11 +1,12 @@
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "display.h"
+#include "font.h"
 #include <math.h>
 #include <stdarg.h>
 
 /*
-320x240
+240x320
 SPI2:
 B14(hanging) SDO/MISO
 B10 SCK
@@ -49,7 +50,6 @@ B9 CS
 
 void display_initSPI() {
 	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
-	// RCC->APB2ENR |= RCC_APB2ENR_SPI4EN;
 
 	SPI_PIN_INIT(SCK);
 	SPI_PIN_INIT(MOSI);
@@ -168,7 +168,7 @@ static void display_regInit(void) {
 	command(16, 0xE1, 0x00, 0x16, 0x1B, 0x04, 0x11, 0x07, 0x31, 0x33, 0x42, 0x05, 0x0C, 0x0A, 0x28, 0x2F, 0x0F);
 
 	command(2, 0x3A, 0x55);       // RGB565
-	command(2, 0x36, 0b10010100); // memory access control
+	command(2, 0x36, 0b00001000); // memory access control
 
 	reg(0x11); // sleep out
 	delay_ms(120);
@@ -203,8 +203,34 @@ void display_sendBytes(uint16_t* pixels, uint32_t pixelCount) {
 	stream((uint8_t*)pixels, pixelCount * 2);
 }
 
-void display_clear(uint8_t halfColor) {
-	uint32_t count = display_setWindow(0, 0, 240, 320);
+void display_clear(uint8_t halfColor, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+	uint32_t count = display_setWindow(x, y, w, h);
 	reg(0x2C);
 	fill(halfColor, count * 2);
+}
+
+void display_digit(uint16_t* gfx, uint8_t v, uint16_t atX, uint16_t atY, uint16_t backColor, uint16_t foreColor) {
+	uint16_t* cursor = gfx;
+
+	uint32_t pc = display_setWindow(atX, atY, DIGIT_W, DIGIT_H);
+	for (int y = DIGIT_H - 1; y >= 0; --y) {
+		uint8_t row = CHARACTERS[v][y/2];
+		for (int x = 0; x < DIGIT_W; ++x) {
+			uint8_t bright = row & (1 << (3 - x/2));
+			*cursor = bright ? foreColor : backColor;
+			++cursor;
+		}
+	}
+	display_sendBytes(gfx, pc);
+}
+
+void display_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
+	display_clear(0x11, 0, atY, 240, DIGIT_H);
+	while(1) {
+		atX -= DIGIT_W;
+		uint8_t digit = v % 10;
+		display_digit(gfx, digit, atX, atY, 0x0000, 0xFFFF);
+		v /= 10;
+		if (v <= 0) return;
+	}
 }

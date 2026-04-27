@@ -49,7 +49,7 @@ int main(void) {
 	display_init();
 	touch_initSPI();
 
-	display_clear(0x00);
+	display_clear(0x00, 0, 0, 240, 320);
 
 	/*
 	B   Mag
@@ -100,21 +100,16 @@ int main(void) {
 		if (button || touch) {
 			ledOn();
 			if (touch) {
-				uint32_t point = touch_poll();
-				uint16_t x = point >> 16;
-				uint16_t y = point & 0xFFFF;
-				uint16_t color = COL_G;
-				uint8_t flyoff = x > 200 || y > 200;
-				if (flyoff) {
-					status(x ^ y);
-				} else {
-					display_setWindow(x, y, 2, 2);
-					GFX[0] = color;
-					GFX[1] = color;
-					GFX[2] = color;
-					GFX[3] = color;
-					display_sendBytes(GFX, 4);
-				}
+				uint16_t x;
+				uint16_t y;
+				uint16_t lineOffset = DIGIT_H * 1.5;
+				touch_poll(&x, &y);
+				display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 0);
+				display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 1);
+				touch_calibrate(&x, &y);
+				display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 2);
+				display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 3);
+				offset *= 2;
 			}
 		} else {
 			ledOff();

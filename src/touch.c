@@ -1,6 +1,7 @@
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "touch.h"
+#include <float.h>
 #include <math.h>
 
 #define SPI SPI3
@@ -30,8 +31,30 @@
 	MODER(pin##_PORT, pin##_PIN, 1); \
 	pin##_HIGH();
 
-const uint8_t CTRL_X = 0b11010000;
+const uint8_t CTRL_X = 0b11010001;
 const uint8_t CTRL_Y = 0b10010000;
+
+const float CAL_LO_X = 1890.0;
+const float CAL_HI_X = 120.0;
+const float CAL_LO_Y = 1940.0;
+const float CAL_HI_Y = 180.0;
+float remap(float x, float fromMin, float fromMax, float toMin, float toMax) {
+	return (x - fromMin) * (toMax - toMin) / (fromMax - fromMin) + toMin;
+}
+
+void touch_calibrate(uint16_t* x, uint16_t* y) {
+	float fx = (float)(*x);
+	float fy = (float)(*y);
+	float ax = remap(fx, CAL_LO_X, CAL_HI_X, 0.0, 240.0);
+	float ay = remap(fy, CAL_LO_Y, CAL_HI_Y, 0.0, 320.0);
+	if (ax < 0) ax = 0;
+	// if (ax > 240) ax = 240;
+	if (ay < 0) ay = 0;
+	// if (ay > 320) ay = 320;
+
+	*x = (uint16_t)ax;
+	*y = (uint16_t)ay;
+}
 
 void touch_initSPI() {
 	RCC->APB1ENR |= RCC_APB1ENR_SPI3EN;
@@ -78,21 +101,19 @@ static uint16_t SPI_Sub(uint8_t data) {
 	return ((hi << 8) | lo) >> 4;
 }
 
-uint32_t touch_poll() {
+void touch_poll(uint16_t* x, uint16_t* y) {
 	(void)SPI->DR;
 	(void)SPI->SR;
 
 	NSS_LOW();
 
-	uint16_t x = SPI_Sub(CTRL_X);
-	uint16_t y = SPI_Sub(CTRL_Y);
+	*x = SPI_Sub(CTRL_X);
+	*y = SPI_Sub(CTRL_Y);
 
 	// Wait until not busy (important!)
 	while (SPI_BSY(SPI));
 
 	NSS_HIGH();
-
-	return (x << 16) | y;
 }
 
 uint8_t touch_up() {
