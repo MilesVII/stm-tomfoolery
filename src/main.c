@@ -16,12 +16,8 @@ void ledOn() {
 	GPIOC->ODR &= ~(1 << 13);
 }
 
-void status(uint16_t color) {
-	uint32_t pc = display_setWindow(0, 0, 10, 10);
-	for (int i = 0; i < pc; ++i) {
-		GFX[i] = color;
-	}
-	display_sendBytes(GFX, pc);
+void status(uint8_t halfColor) {
+	display_clear(halfColor, 0, 0, 4, 4);
 }
 
 const uint16_t COL_R = 0b1111100000000000;
@@ -59,10 +55,7 @@ int main(void) {
 	uint32_t offset = 0;
 	uint32_t pixelCount = display_setWindow(10, 10, 69, 32);
 	for (int i = 0; i < pixelCount; ++i) {
-		if (i % 69 < 32 && i < 69*16)
-			GFX[i + offset] = 0xFFFF;
-		else
-			GFX[i + offset] = 0xFFFF;
+		GFX[i + offset] = 0x0000;
 	}
 	display_sendBytes(GFX + offset, pixelCount);
 	offset += pixelCount;
@@ -72,7 +65,7 @@ int main(void) {
 		if (i % 69 < 32 && i < 69*16)
 			GFX[i + offset] = COL_G;
 		else
-			GFX[i + offset] = 0xFFFF;
+			GFX[i + offset] = 0x0000;
 	}
 	display_sendBytes(GFX + offset, pixelCount);
 	offset += pixelCount;
@@ -82,17 +75,17 @@ int main(void) {
 		if (i % 69 < 32 && i < 69*16)
 			GFX[i + offset] = COL_B;
 		else
-			GFX[i + offset] = 0xFFFF;
+			GFX[i + offset] = 0x0000;
 	}
 	display_sendBytes(GFX + offset, pixelCount);
 	offset += pixelCount;
 
 	uint8_t cycles = 0;
 	while (1) {
-		delay_ms(32);
+		// delay_ms(32);
 		cycles = (cycles + 1) % 32;
 		if (cycles == 0 || cycles == 16) {
-			status(cycles ? 0xFFFF : FLIP16(COL_B));
+			status(cycles ? 0xF0 : 0x00);
 		}
 
 		uint8_t button = !GPIOA->IDR & (1 << 0);
@@ -104,12 +97,17 @@ int main(void) {
 				uint16_t y;
 				uint16_t lineOffset = DIGIT_H * 1.5;
 				touch_poll(&x, &y);
-				display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 0);
-				display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 1);
+				touch_poll(&x, &y);
+				// display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 0);
+				// display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 1);
 				touch_calibrate(&x, &y);
-				display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 2);
-				display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 3);
-				offset *= 2;
+				// display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 2);
+				// display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 3);
+				uint16_t pc = display_setWindow(x-1, y-1, 3, 3);
+				for (uint16_t i = 0; i < pc; ++i) {
+					GFX[i] = 0xF00D;
+				};
+				display_sendBytes(GFX, pc);
 			}
 		} else {
 			ledOff();
