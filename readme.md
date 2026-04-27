@@ -17,7 +17,7 @@ A6 MISO
 A7 MOSI
 ```
 
-## ILI9341
+## ILI9341V
 LED(ignored) -> 3V via 100ohm
 ```
 SPI2 AF5:
@@ -27,18 +27,16 @@ B15 SDI/MOSI
 
 GPIO:
 B8 DC
-B7 RESET
+B2 RESET
 B9 CS (manual)
 ```
 
-## XPT2046
+## FT6336G
 ```
-SPI3 AF6:
-B4 DO
-B5 DIN
-B3 CLK
+I2C1 AF4:
+B6 SCL
+B7 SDA
 
-GPIO:
-B6 IRQ
-A15 CS (manual)
+B4 INT (manual)
+B5 RST (manual)
 ```

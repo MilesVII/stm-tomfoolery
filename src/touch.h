@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 
-void touch_initSPI();
-void touch_poll(uint16_t* x, uint16_t* y);
+void touch_initI2C();
+void touch_poll(uint8_t* touchCount, uint16_t* coordinates);
 uint8_t touch_up();
-void touch_calibrate(uint16_t* x, uint16_t* y);

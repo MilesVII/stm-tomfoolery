@@ -31,7 +31,7 @@ B9 CS
 #define NSS_LOW()   PIN_CLR(NSS_PORT, GPIO_PIN(NSS_PIN))
 
 #define RST_PORT    GPIOB
-#define RST_PIN     7
+#define RST_PIN     2
 #define RST_HIGH()  PIN_SET(RST_PORT, GPIO_PIN(RST_PIN))
 #define RST_LOW()   PIN_CLR(RST_PORT, GPIO_PIN(RST_PIN))
 
@@ -143,29 +143,29 @@ static void command(int count, ...) {
 	va_end(args); // Clean up
 }
 
-static void display_reset(void) {
+void display_init() {
 	RST_HIGH();
 	delay_ms(100);
 	RST_LOW();
 	delay_ms(100);
 	RST_HIGH();
 	delay_ms(100);
-}
 
-static void display_regInit(void) {
 	reg(0x01); // SWRESET;
 	delay_ms(150);
 
 	reg(0x28); // off
 
-	command(6, 0xCB, 0x39, 0x2C, 0x00, 0x34, 0x02); // power control A
-	command(4, 0xCF, 0x00, 0xC1, 0x30); // power control B
-	command(4, 0xE8, 0x85, 0x00, 0x78); // driver timing control
-	command(5, 0xED, 0x64, 0x03, 0x12, 0x81); // power on sequence control
-	command(2, 0xC5, 0x20); // vcom control 1
-	command(2, 0xC7, 0x55); // vcom control 2
-	command(16, 0xE0, 0x0F, 0x29, 0x24, 0x0C, 0x0E, 0x09, 0x4E, 0x78, 0x3C, 0x09, 0x13, 0x05, 0x17, 0x11, 0x00);
-	command(16, 0xE1, 0x00, 0x16, 0x1B, 0x04, 0x11, 0x07, 0x31, 0x33, 0x42, 0x05, 0x0C, 0x0A, 0x28, 0x2F, 0x0F);
+	reg(0x21); // color inversion
+	// command(2, 0xC0, 0x23); // power control A
+	// command(2, 0xC1, ____); // power control B
+	// command(3, 0xC5, 0x3E, 0x28); // vcom control 1
+	// command(2, 0xC7, 0x86); // vcom control 2
+
+	// command(4, 0xE8, 0x85, 0x00, 0x78); // driver timing control A
+	// command(5, 0xED, 0x64, 0x03, 0x12, 0x81); // power on sequence control
+	// command(16, 0xE0, 0x0F, 0x29, 0x24, 0x0C, 0x0E, 0x09, 0x4E, 0x78, 0x3C, 0x09, 0x13, 0x05, 0x17, 0x11, 0x00);
+	// command(16, 0xE1, 0x00, 0x16, 0x1B, 0x04, 0x11, 0x07, 0x31, 0x33, 0x42, 0x05, 0x0C, 0x0A, 0x28, 0x2F, 0x0F);
 
 	command(2, 0x3A, 0x55);       // RGB565
 	command(2, 0x36, 0b00001000); // memory access control
@@ -173,11 +173,6 @@ static void display_regInit(void) {
 	reg(0x11); // sleep out
 	delay_ms(120);
 	reg(0x29); // on
-}
-
-void display_init() {
-	display_reset();
-	display_regInit();
 }
 
 #define HI(v) ((v) >> 8)
@@ -233,4 +228,28 @@ void display_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
 		v /= 10;
 		if (v <= 0) return;
 	}
+}
+
+static int patternA(int x){
+	return ((x*x)&x);
+}
+static int patternB(int x){
+	return (x>>7)&x;
+}
+uint8_t buf[480];
+void display_pattern() {
+	uint8_t c0 = 0b11011010;
+	uint8_t c1 = 0b00000000;
+	uint32_t count = display_setWindow(0, 0, 240, 320);
+	reg(0x2C);
+	for (int y = 0; y < 320; ++y) {
+		for (int x = 0; x < 240; ++x) {
+			int v = (x + 120) ^ y;
+			uint8_t c = patternA(v) > patternB(v) ? 0 : 1;
+			buf[x * 2] = c0 * c;
+			buf[x * 2 + 1] = c1 * c;
+		}
+		stream(buf, 480);
+	}
+	// fill(halfColor, count * 2);
 }

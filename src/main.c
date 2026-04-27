@@ -19,6 +19,10 @@ void ledOn() {
 void status(uint8_t halfColor) {
 	display_clear(halfColor, 0, 0, 4, 4);
 }
+void line(uint16_t v, uint16_t line) {
+	const uint16_t lineOffset = DIGIT_H * 1.5;
+	display_number(GFX, v, 239 - 4, 319 - DIGIT_H - lineOffset * line);
+}
 
 const uint16_t COL_R = 0b1111100000000000;
 const uint16_t COL_G = 0b0000011111100000;
@@ -43,49 +47,18 @@ int main(void) {
 	display_initSPI();
 	delay_ms(200);
 	display_init();
-	touch_initSPI();
+	touch_initI2C();
 
 	display_clear(0x00, 0, 0, 240, 320);
 
-	/*
-	B   Mag
-	GR
-	*/
-	//RGB565
-	uint32_t offset = 0;
-	uint32_t pixelCount = display_setWindow(10, 10, 69, 32);
-	for (int i = 0; i < pixelCount; ++i) {
-		GFX[i + offset] = 0x0000;
-	}
-	display_sendBytes(GFX + offset, pixelCount);
-	offset += pixelCount;
-
-	display_setWindow(10, 42, 69, 32);
-	for (int i = 0; i < pixelCount; ++i) {
-		if (i % 69 < 32 && i < 69*16)
-			GFX[i + offset] = COL_G;
-		else
-			GFX[i + offset] = 0x0000;
-	}
-	display_sendBytes(GFX + offset, pixelCount);
-	offset += pixelCount;
-
-	display_setWindow(79, 10, 69, 32);
-	for (int i = 0; i < pixelCount; ++i) {
-		if (i % 69 < 32 && i < 69*16)
-			GFX[i + offset] = COL_B;
-		else
-			GFX[i + offset] = 0x0000;
-	}
-	display_sendBytes(GFX + offset, pixelCount);
-	offset += pixelCount;
-
 	uint8_t cycles = 0;
+	uint8_t touchCount = 0;
+	uint16_t touches[4] = { 0, 0, 0, 0 };
 	while (1) {
-		// delay_ms(32);
-		cycles = (cycles + 1) % 32;
-		if (cycles == 0 || cycles == 16) {
-			status(cycles ? 0xF0 : 0x00);
+		delay_ms(32);
+		cycles = (cycles + 1) % 64;
+		if (cycles == 0 || cycles == 8) {
+			status(cycles ? 0x00 : 0xF0);
 		}
 
 		uint8_t button = !GPIOA->IDR & (1 << 0);
@@ -93,22 +66,20 @@ int main(void) {
 		if (button || touch) {
 			ledOn();
 			if (touch) {
-				uint16_t x;
-				uint16_t y;
-				uint16_t lineOffset = DIGIT_H * 1.5;
-				touch_poll(&x, &y);
-				touch_poll(&x, &y);
-				// display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 0);
-				// display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 1);
-				touch_calibrate(&x, &y);
-				// display_number(GFX, x, 239 - 4, 319 - DIGIT_H - lineOffset * 2);
-				// display_number(GFX, y, 239 - 4, 319 - DIGIT_H - lineOffset * 3);
-				uint16_t pc = display_setWindow(x-1, y-1, 3, 3);
-				for (uint16_t i = 0; i < pc; ++i) {
-					GFX[i] = 0xF00D;
-				};
-				display_sendBytes(GFX, pc);
+				touch_poll(&touchCount, touches);
+
+				if (touchCount >= 1) {
+					line(touches[0], 1);
+					line(touches[1], 1);
+				}
+				if (touchCount >= 2) {
+					line(touches[2], 1);
+					line(touches[3], 1);
+				}
+			} else {
+				touchCount = 0;
 			}
+			line(touchCount, 0);
 		} else {
 			ledOff();
 		}

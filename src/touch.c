@@ -1,121 +1,100 @@
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "touch.h"
-#include <float.h>
-#include <math.h>
 
-#define SPI SPI3
+#define I2C_DEVICE_ADDRESS 0x38
+// 0x00 Device mode
+// touch point count
+#define I2C_REG_TPC 0x06
+// XH XL YH YL
+#define I2C_REG_T0_START 0x03
+// XH XL YH YL
+#define I2C_REG_T1_START 0x09
 
-#define SCK_PORT    GPIOB
-#define SCK_PIN     3
+#define I2C I2C1
+// AF04
+#define SCL_PORT GPIOB
+#define SCL_PIN  6
 
-#define MOSI_PORT   GPIOB
-#define MOSI_PIN    5
+#define SDA_PORT GPIOB
+#define SDA_PIN  7
 
-#define MISO_PORT   GPIOB
-#define MISO_PIN    4
+#define INT_PORT GPIOB
+#define INT_PIN  4
+#define INT_READ()  INT_PORT->IDR & (1 << INT_PIN);
 
-#define NSS_PORT    GPIOA
-#define NSS_PIN     15
-#define NSS_HIGH()  PIN_SET(NSS_PORT, GPIO_PIN(NSS_PIN))
-#define NSS_LOW()   PIN_CLR(NSS_PORT, GPIO_PIN(NSS_PIN))
+#define RST_PORT GPIOB
+#define RST_PIN  5
+#define RST_HIGH()  PIN_SET(RST_PORT, GPIO_PIN(RST_PIN))
+#define RST_LOW()   PIN_CLR(RST_PORT, GPIO_PIN(RST_PIN))
 
-#define PIRQ_PORT   GPIOB
-#define PIRQ_PIN    6
-
-#define SPI_PIN_INIT(pin) \
+#define I2C_PIN_INIT(pin) \
 	MODER(pin##_PORT, pin##_PIN, 2); \
-	AFR(pin##_PORT, pin##_PIN, 6); \
-	OSPEEDR(pin##_PORT, pin##_PIN, 3);
+	AFR(pin##_PORT, pin##_PIN, 4); \
+	OSPEEDR(pin##_PORT, pin##_PIN, 3) \
+	OTYPER(pin##_PORT, pin##_PIN, 1);
 #define OUT_PIN_INIT(pin) \
 	MODER(pin##_PORT, pin##_PIN, 1); \
 	pin##_HIGH();
+#define IN_PIN_INIT(pin) \
+	PUPDR(pin##_PORT, pin##_PIN, 1);
 
-const uint8_t CTRL_X = 0b11010001;
-const uint8_t CTRL_Y = 0b10010000;
+void touch_initI2C() {
+	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
 
-const float CAL_LO_X = 1890.0;
-const float CAL_HI_X = 120.0;
-const float CAL_LO_Y = 1940.0;
-const float CAL_HI_Y = 180.0;
-float remap(float x, float fromMin, float fromMax, float toMin, float toMax) {
-	return (x - fromMin) * (toMax - toMin) / (fromMax - fromMin) + toMin;
+	I2C_PIN_INIT(SCL);
+	I2C_PIN_INIT(SDA);
+	OUT_PIN_INIT(RST);
+	IN_PIN_INIT(INT);
+
+	I2C->CR1 = I2C_CR1_SWRST;
+	I2C->CR1 = 0;
+
+	I2C->CR2 |= 0x10;
+	I2C->CCR |= 0x50;
+	I2C->TRISE |= (11 << 0);
+	I2C->CR1 |= I2C_CR1_PE;
+
+	RST_LOW();
+	delay_ms(100);
+	RST_HIGH();
+	delay_ms(100);
 }
 
-void touch_calibrate(uint16_t* x, uint16_t* y) {
-	float fx = (float)(*x);
-	float fy = (float)(*y);
-	float ax = remap(fx, CAL_LO_X, CAL_HI_X, 0.0, 240.0);
-	float ay = remap(fy, CAL_LO_Y, CAL_HI_Y, 0.0, 320.0);
-	if (ax < 0) ax = 0;
-	// if (ax > 240) ax = 240;
-	if (ay < 0) ay = 0;
-	// if (ay > 320) ay = 320;
+static void read_bytes(uint8_t reg, uint8_t* dst, uint16_t count) {
+	I2C_START(I2C);
+	I2C_ADDRESS_W(I2C, I2C_DEVICE_ADDRESS);
 
-	*x = (uint16_t)ax;
-	*y = (uint16_t)ay;
+	I2C_SEND(I2C, reg);
+
+	I2C_START(I2C);
+	I2C_ADDRESS_R(I2C, I2C_DEVICE_ADDRESS);
+
+	for (int i = 0; i < count; ++i) {
+		if (i == count - 1) {
+			I2C_ACK_OUT(I2C);
+		} else {
+			I2C_ACK_IN(I2C);
+		}
+
+		I2C_READ(I2C, dst[i]);
+	}
+	I2C_STOP(I2C);
 }
 
-void touch_initSPI() {
-	RCC->APB1ENR |= RCC_APB1ENR_SPI3EN;
-
-	SPI_PIN_INIT(SCK);
-	SPI_PIN_INIT(MOSI);
-	SPI_PIN_INIT(MISO);
-	OUT_PIN_INIT(NSS);
-	PUPDR(PIRQ_PORT, PIRQ_PIN, 1);
-
-	// clear
-	SPI->CR1 = 0;
-	SPI->CR2 = 0;
-
-	SPI->CR1 =
-		SPI_CR1_MSTR |
-		SPI_CR1_SSI  |
-		SPI_CR1_SSM  |
-		SPI_CR1_BR_1 | SPI_CR1_BR_2;
-	SPI->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
-
-	// SPI->CR2 = (7 << 8);
-	
-	SPI->CR1 |= SPI_CR1_SPE;
+static void read_point(uint16_t* dst, uint8_t reg) {
+	uint8_t buf[4];
+	read_bytes(reg, buf, 4);
+	dst[0] = (buf[0] & 0x0F) << 8 | buf[1];
+	dst[1] = (buf[2] & 0x0F) << 8 | buf[3];
 }
 
-// Simple blocking transmit (1 byte) + receive (full duplex)
-static uint8_t SPI_Transfer(uint8_t data) {
-	while (!SPI_TXE_READY(SPI));
-
-	// Send data
-	SPI->DR = data;
-
-	// Wait until RX buffer not empty (also ensures transfer finished)
-	while (!SPI_RXNE_READY(SPI));
-
-	// Read received byte
-	return (uint8_t) SPI->DR;
-}
-static uint16_t SPI_Sub(uint8_t data) {
-	SPI_Transfer(data);
-	uint8_t hi = SPI_Transfer(0x00);
-	uint8_t lo = SPI_Transfer(0x00);
-	return ((hi << 8) | lo) >> 4;
-}
-
-void touch_poll(uint16_t* x, uint16_t* y) {
-	(void)SPI->DR;
-	(void)SPI->SR;
-
-	NSS_LOW();
-
-	*x = SPI_Sub(CTRL_X);
-	*y = SPI_Sub(CTRL_Y);
-
-	// Wait until not busy (important!)
-	while (SPI_BSY(SPI));
-
-	NSS_HIGH();
+void touch_poll(uint8_t* touchCount, uint16_t* coordinates) {
+	read_bytes(I2C_REG_TPC, touchCount, 1);
+	if (*touchCount >= 1) read_point(coordinates, I2C_REG_T0_START);
+	if (*touchCount >= 2) read_point(coordinates, I2C_REG_T1_START);
 }
 
 uint8_t touch_up() {
-	return PIRQ_PORT->IDR & (1 << PIRQ_PIN);
+	return INT_READ();
 }

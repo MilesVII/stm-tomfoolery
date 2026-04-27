@@ -34,18 +34,24 @@
 #define I2C_STOP(i2c) \
 	(i2c)->CR1 |= I2C_CR1_STOP; \
 	while((i2c)->SR2 & I2C_SR2_BUSY);
-#define I2C_ADDRESS(i2c, address) \
-	(i2c)->DR = (address); \
-	while (!((i2c)->SR1 & I2C_SR1_ADDR));
 #define I2C_FLUSH(i2c) \
 	(void)(i2c)->SR1; \
 	(void)(i2c)->SR2;
+#define I2C_ADDRESS(i2c, address) \
+	(i2c)->DR = (address); \
+	while (!((i2c)->SR1 & I2C_SR1_ADDR));
+#define I2C_ADDRESS_W(i2c, address) \
+	I2C_ADDRESS(i2c, (address) << 1) \
+	I2C_FLUSH(i2c)
+#define I2C_ADDRESS_R(i2c, address) \
+	I2C_ADDRESS(i2c, ((address) << 1) | 1) \
+	I2C_FLUSH(i2c)
 #define I2C_SEND(i2c, payload) \
 	(i2c)->DR = (payload); \
 	while (!((i2c)->SR1 & I2C_SR1_TXE));
 #define I2C_READ(i2c, dst) \
 	while (!((i2c)->SR1 & I2C_SR1_RXNE)); \
-	uint8_t (dst) = (i2c)->DR;
+	(dst) = (i2c)->DR;
 #define I2C_ACK_IN(i2c) \
 	(i2c)->CR1 |= I2C_CR1_ACK;
 #define I2C_ACK_OUT(i2c) \
