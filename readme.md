@@ -35,6 +35,21 @@ B2 RESET
 B9 CS (soft NSS)
 ```
 
+
+## SH1106
+display but cute
+
+```
+SP1 AF5:
+A5 SCK
+A7 MOSI
+
+GPIO:
+B0 D/C
+B1 RESET
+A6 CS
+```
+
 ## FT6336G
 capacitive touchscreen
 ```
