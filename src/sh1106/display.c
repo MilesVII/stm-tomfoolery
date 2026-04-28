@@ -39,32 +39,24 @@ static void display_initSPI() {
 	SPI->CR1 |= SPI_CR1_SPE;
 }
 
-// Simple blocking transmit (1 byte) + receive (full duplex)
 static uint8_t SPI_Transfer(uint8_t data, uint8_t read) {
 	while (!SPI_TXE_READY(SPI));
 
-	// Send data
 	SPI->DR = data;
-
-	// Wait until RX buffer not empty (also ensures transfer finished)
 	while (!SPI_RXNE_READY(SPI));
 
-	// Read received byte
 	if (read)
 		return (uint8_t) SPI->DR;
 	else
 		return (uint8_t) 0;
 }
 
-// Blocking transmit array (most common use-case)
-static void SPI_Write(uint8_t *data, uint32_t len) {
+static void SPI_Write(uint8_t *data, uint32_t count) {
 	NSS_LOW();
 
-	for (uint32_t i = 0; i < len; i++) {
+	for (uint32_t i = 0; i < count; i++) {
 		SPI_Transfer(data[i], 0);
 	}
-
-	// Wait until not busy (important!)
 	while (SPI_BSY(SPI));
 
 	NSS_HIGH();
@@ -77,6 +69,10 @@ static void reg(uint8_t command) {
 static void data(uint8_t byte) {
 	DC_HIGH();
 	SPI_Write(&byte, 1);
+}
+static void stream(uint8_t* byte, uint32_t count) {
+	DC_HIGH();
+	SPI_Write(byte, count);
 }
 
 static void display_reset(void) {
@@ -144,28 +140,6 @@ void display_clear(void) {
 	}
 }
 
-void display_update(uint8_t targetPage) {
-	uint16_t page, row, temp;
-
-	for (page = 0; page < 8; ++page) {
-		/* set page address */
-		reg(0xB0 + page);
-		/* set low column address */
-		reg(0x02);
-		/* set high column address */
-		reg(0x10);
-
-		/* write data */
-		for(row = 0; row < 128; ++row) {
-			if (page == targetPage && (row / 8 == targetPage)) {
-				data(0xFF);
-			} else {
-				data(0x00);
-			}
-		}
-	}
-}
-
 #define PAGE_CAP (DISPLAY_W / 8)
 #define CHAR_CAP 10 // PAGE_CAP * 2;
 static uint8_t drawChar(uint16_t page, uint16_t row, uint32_t status) {
@@ -212,5 +186,33 @@ void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 				data(frame[x * 32 + y]);
 			}
 		}
+	}
+}
+
+static uint8_t bank[128];
+void display_updateTranslated(uint8_t* src) {
+	/* SRC:
+	...
+	[0x08]...
+	[0x00][0x01][0x02][0x03][0x04][0x05][0x06][0x07]
+	*/
+	/* memory pages:
+	[row2]
+	[row1]
+	[row0]
+	x [p0] [p1] [p2] etc
+	*/
+	for (uint16_t page = 0; page < PAGE_CAP; ++page) {
+		/* set page address */
+		reg(0xB0 + page);
+		/* set low column address */
+		reg(0x02);
+		/* set high column address */
+		reg(0x10);
+
+		for (uint16_t y = 0; y < DISPLAY_H; ++y) {
+			bank[y] = src[page + y * PAGE_CAP];
+		}
+		stream(bank, 128);
 	}
 }
