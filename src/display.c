@@ -19,43 +19,20 @@ B9 CS
 */
 #define SPI SPI2
 
-#define SCK_PORT    GPIOB
-#define SCK_PIN     10
-
-#define MOSI_PORT   GPIOB
-#define MOSI_PIN    15
-
-#define NSS_PORT    GPIOB
-#define NSS_PIN     9
-#define NSS_HIGH()  PIN_SET(NSS_PORT, GPIO_PIN(NSS_PIN))
-#define NSS_LOW()   PIN_CLR(NSS_PORT, GPIO_PIN(NSS_PIN))
-
-#define RST_PORT    GPIOB
-#define RST_PIN     2
-#define RST_HIGH()  PIN_SET(RST_PORT, GPIO_PIN(RST_PIN))
-#define RST_LOW()   PIN_CLR(RST_PORT, GPIO_PIN(RST_PIN))
-
-#define DC_PORT     GPIOB
-#define DC_PIN      8
-#define DC_HIGH()   PIN_SET(DC_PORT, GPIO_PIN(DC_PIN))
-#define DC_LOW()    PIN_CLR(DC_PORT, GPIO_PIN(DC_PIN))
-
-#define SPI_PIN_INIT(pin) \
-	MODER(pin##_PORT, pin##_PIN, 2); \
-	AFR(pin##_PORT, pin##_PIN, 5); \
-	OSPEEDR(pin##_PORT, pin##_PIN, 3);
-#define OUT_PIN_INIT(pin) \
-	MODER(pin##_PORT, pin##_PIN, 1); \
-	pin##_HIGH();
+DECLARE_SPI(SCK , B, 10, 5);
+DECLARE_SPI(MOSI, B, 15, 5);
+DECLARE_GPIO_MOUT(NSS, B, 9);
+DECLARE_GPIO_MOUT(RST, B, 2);
+DECLARE_GPIO_MOUT(DC , B, 8);
 
 void display_initSPI() {
 	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
 
-	SPI_PIN_INIT(SCK);
-	SPI_PIN_INIT(MOSI);
-	OUT_PIN_INIT(NSS);
-	OUT_PIN_INIT(DC);
-	OUT_PIN_INIT(RST);
+	SCK_INIT();
+	MOSI_INIT();
+	NSS_INIT();
+	DC_INIT();
+	RST_INIT();
 
 	// clear
 	SPI->CR1 = 0;

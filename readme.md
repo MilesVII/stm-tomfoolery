@@ -37,6 +37,6 @@ I2C1 AF4:
 B6 SCL
 B7 SDA
 
-B4 INT (manual)
+INT (unused (fucking useless))
 B5 RST (manual)
 ```

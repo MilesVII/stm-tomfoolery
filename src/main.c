@@ -7,13 +7,14 @@
 uint16_t GFX[120*160];
 #define FLIP16(v) ((v) >> 8 | ((v) << 8) & 0xFF00)
 
+DECLARE_GPIO_MOUT(LED, C, 13);
+DECLARE_GPIO_MIN(BUTT, A, 0);
+
 void ledOff() {
-	// C13 high
-	GPIOC->ODR |= (1 << 13);
+	LED_HIGH();
 }
 void ledOn() {
-	// C13 low
-	GPIOC->ODR &= ~(1 << 13);
+	LED_LOW();
 }
 
 void status(uint8_t halfColor) {
@@ -36,18 +37,14 @@ int main(void) {
 		RCC_AHB1ENR_GPIOBEN |
 		RCC_AHB1ENR_GPIOCEN;
 
-	// PC13 led
-	MODER(GPIOC, 13, 1)
-
-	// A0 button
-	// MODER(GPIOA, 13, 1)
-	PUPDR(GPIOA, 0, 1);
+	LED_INIT();
+	BUTT_INIT();
 
 	delay_ms(200);
 	display_initSPI();
 	delay_ms(200);
 	display_init();
-	touch_initI2C();
+	touch_init();
 
 	display_clear(0x00, 0, 0, 240, 320);
 
@@ -56,30 +53,24 @@ int main(void) {
 	uint16_t touches[4] = { 0, 0, 0, 0 };
 	while (1) {
 		delay_ms(32);
-		cycles = (cycles + 1) % 64;
-		if (cycles == 0 || cycles == 8) {
-			status(cycles ? 0x00 : 0xF0);
+		cycles = (cycles + 1) % 32;
+		if (cycles == 0 || cycles == 16) {
+			status(cycles ? 0x0F : 0xF0);
 		}
 
-		uint8_t button = !GPIOA->IDR & (1 << 0);
-		uint8_t touch = !touch_up();
-		if (button || touch) {
+		touch_poll(&touchCount, touches);
+		line(touchCount, 0);
+		uint8_t button = !BUTT_READ();
+		if (button || touchCount > 0) {
 			ledOn();
-			if (touch) {
-				touch_poll(&touchCount, touches);
-
-				if (touchCount >= 1) {
-					line(touches[0], 1);
-					line(touches[1], 1);
-				}
-				if (touchCount >= 2) {
-					line(touches[2], 1);
-					line(touches[3], 1);
-				}
-			} else {
-				touchCount = 0;
+			if (touchCount >= 1) {
+				line(239 - touches[0], 1);
+				line(touches[1], 2);
 			}
-			line(touchCount, 0);
+			if (touchCount >= 2) {
+				line(239 - touches[2], 3);
+				line(touches[3], 4);
+			}
 		} else {
 			ledOff();
 		}

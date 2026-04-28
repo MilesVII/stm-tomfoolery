@@ -57,4 +57,25 @@
 #define I2C_ACK_OUT(i2c) \
 	(i2c)->CR1 &= ~I2C_CR1_ACK;
 
+#define DECLARE_SPI(name, port, pin, afr) \
+	static void name##_INIT() { \
+		MODER(GPIO##port, pin, 2); \
+		AFR(GPIO##port, pin, afr); \
+		OSPEEDR(GPIO##port, pin, 3); \
+	}
+#define DECLARE_I2C(name, port, pin, afr) \
+	static void name##_INIT() { \
+		MODER(GPIO##port, pin, 2); \
+		AFR(GPIO##port, pin, afr); \
+		OSPEEDR(GPIO##port, pin, 3) \
+		OTYPER(GPIO##port, pin, 1);\
+	}
+#define DECLARE_GPIO_MOUT(name, port, pin) \
+	static void name##_HIGH() { PIN_SET(GPIO##port, GPIO_PIN(pin)); } \
+	static void name##_LOW()  { PIN_CLR(GPIO##port, GPIO_PIN(pin)); } \
+	static void name##_INIT() { MODER(GPIO##port, pin, 1); name##_HIGH(); }
+#define DECLARE_GPIO_MIN(name, port, pin) \
+	static    void name##_INIT() { PUPDR(GPIO##port, pin, 1); } \
+	static uint8_t name##_READ() { return GPIO##port->IDR & (1 << pin); }
+
 void delay_ms(uint32_t ms);
