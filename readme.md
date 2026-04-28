@@ -1,9 +1,10 @@
-STM32F411
-
-Pure CMSIS display driver, no HAL
+# STM32F411
+Pure CMSIS drivers, no HAL
 
 # pins
-## 25Q64JVSIQ 8MiB flash chip:
+## 25Q64JVSIQ
+8MiB flash chip
+
 ```
 3V 3V A5 A7
 A4 A6 3V GND
@@ -17,9 +18,12 @@ A6 MISO
 A7 MOSI
 ```
 
-## ILI9341V
-LED(ignored) -> 3V via 100ohm
+## ILI9341/V
+display
+
 ```
+LED(ignored) -> 3V via 100ohm
+
 SPI2 AF5:
 (hanging) SDO/MISO
 B10 SCK
@@ -28,15 +32,29 @@ B15 SDI/MOSI
 GPIO:
 B8 DC
 B2 RESET
-B9 CS (manual)
+B9 CS (soft NSS)
 ```
 
 ## FT6336G
+capacitive touchscreen
 ```
 I2C1 AF4:
 B6 SCL
 B7 SDA
 
-INT (unused (fucking useless))
-B5 RST (manual)
+GPIO:
+__ INT (unused (fucking useless))
+B5 RST
+```
+
+## XPT2046
+resistive touchscreen
+```
+SPI3 AF6:
+B3 SCK
+B5 MOSI
+
+GPIO:
+A15 NSS (soft)
+B6 IRQ
 ```

@@ -1,11 +1,8 @@
 #include "stm32f411xe.h"
-#include "hal_at_home.h"
+#include "../hal_at_home.h"
 #include "touch.h"
 
 #define I2C_DEVICE_ADDRESS 0x38
-// 0x00 Device mode
-// mode
-#define I2C_REG_MOD 0xA4
 // touch point count
 #define I2C_REG_TPC 0x02
 // XH XL YH YL
@@ -81,6 +78,6 @@ static void read_point(uint16_t* dst, uint8_t reg) {
 
 void touch_poll(uint8_t* touchCount, uint16_t* coordinates) {
 	read_bytes(I2C_REG_TPC, touchCount, 1);
-	if (*touchCount >= 1) read_point(coordinates, I2C_REG_T0_START);
+	if (*touchCount >= 1) read_point(coordinates    , I2C_REG_T0_START);
 	if (*touchCount >= 2) read_point(coordinates + 2, I2C_REG_T1_START);
 }

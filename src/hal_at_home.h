@@ -3,9 +3,7 @@
 #include "stm32f411xe.h"
 #include <stdint.h>
 
-#define PIN_SET(port, pin) ((port)->BSRR = (pin))
-#define PIN_CLR(port, pin) ((port)->BSRR = ((pin) << 16))
-
+// common CMSIS utils
 #define _POW2_1 2
 #define _POW2_2 4
 #define _POW2_3 8
@@ -16,18 +14,23 @@
 	l &= ~((_POW2(size) - 1) << (offset * size)); \
 	l |=  (            value << (offset * size));
 
+#define PIN_SET(port, pin) ((port)->BSRR = (pin))
+#define PIN_CLR(port, pin) ((port)->BSRR = ((pin) << 16))
+
 #define MODER(port, pin, mode)      BIT_ASSIGN(port->MODER  , pin, 2, mode)
 #define AFR(port, pin, mode)        BIT_ASSIGN(port->AFR[pin < 8 ? 0 : 1], pin % 8, 4, mode)
 #define OSPEEDR(port, pin, mode)    BIT_ASSIGN(port->OSPEEDR, pin, 2, mode)
 #define OTYPER(port, pin, mode)     BIT_ASSIGN(port->OTYPER,  pin, 1, mode)
 #define PUPDR(port, pin, mode)      BIT_ASSIGN(port->PUPDR,   pin, 2, mode)
 
-#define GPIO_PIN(v)  ((uint16_t)(1 << v))
+#define GPIO_PIN(v) ((uint16_t)(1 << v))
 
+// SPI utils
 #define SPI_TXE_READY(spi)  (((spi)->SR & SPI_SR_TXE)  != 0)
 #define SPI_RXNE_READY(spi) (((spi)->SR & SPI_SR_RXNE) != 0)
 #define SPI_BSY(spi)        (((spi)->SR & SPI_SR_BSY)  != 0)
 
+// I2C utils
 #define I2C_START(i2c) \
 	(i2c)->CR1 |= I2C_CR1_START; \
 	while(!((i2c)->SR1 & I2C_SR1_SB));
@@ -57,6 +60,7 @@
 #define I2C_ACK_OUT(i2c) \
 	(i2c)->CR1 &= ~I2C_CR1_ACK;
 
+// pin control utils
 #define DECLARE_SPI(name, port, pin, afr) \
 	static void name##_INIT() { \
 		MODER(GPIO##port, pin, 2); \

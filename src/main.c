@@ -1,11 +1,11 @@
 
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
-#include "display.h"
-#include "touch.h"
+#include "ili9341/display.h"
+#include "ft6336g/touch.h"
 
 uint16_t GFX[120*160];
-#define FLIP16(v) ((v) >> 8 | ((v) << 8) & 0xFF00)
+// #define FLIP16(v) ((v) >> 8 | ((v) << 8) & 0xFF00)
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
@@ -40,10 +40,7 @@ int main(void) {
 	LED_INIT();
 	BUTT_INIT();
 
-	delay_ms(200);
-	display_initSPI();
-	delay_ms(200);
-	display_init();
+	display_init(1);
 	touch_init();
 
 	display_clear(0x00, 0, 0, 240, 320);
@@ -64,12 +61,18 @@ int main(void) {
 		if (button || touchCount > 0) {
 			ledOn();
 			if (touchCount >= 1) {
-				line(239 - touches[0], 1);
-				line(touches[1], 2);
+				uint16_t x = 239 - touches[0];
+				uint16_t y = touches[1];
+				line(x, 1);
+				line(y, 2);
+				display_clear(0xFF, x-1, y-1, 3, 3);
 			}
 			if (touchCount >= 2) {
-				line(239 - touches[2], 3);
-				line(touches[3], 4);
+				uint16_t x = 239 - touches[2];
+				uint16_t y = touches[3];
+				line(x, 3);
+				line(y, 4);
+				display_clear(0xFF, x-1, y-1, 3, 3);
 			}
 		} else {
 			ledOff();

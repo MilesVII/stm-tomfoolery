@@ -1,22 +1,11 @@
 #include "stm32f411xe.h"
-#include "hal_at_home.h"
+#include "../hal_at_home.h"
 #include "display.h"
 #include "font.h"
 #include <math.h>
 #include <stdarg.h>
 
-/*
-240x320
-SPI2:
-B14(hanging) SDO/MISO
-B10 SCK
-B15 SDI/MOSI
-
-GPIO:
-B8 DC
-B7 RESET
-B9 CS
-*/
+// 240x320
 #define SPI SPI2
 
 DECLARE_SPI(SCK , B, 10, 5);
@@ -25,7 +14,7 @@ DECLARE_GPIO_MOUT(NSS, B, 9);
 DECLARE_GPIO_MOUT(RST, B, 2);
 DECLARE_GPIO_MOUT(DC , B, 8);
 
-void display_initSPI() {
+static void initSPI() {
 	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
 
 	SCK_INIT();
@@ -44,48 +33,32 @@ void display_initSPI() {
 		SPI_CR1_SSM  |
 		0; //BR /2
 	SPI->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
-
-	// SPI->CR2 = (7 << 8);
 	
 	SPI->CR1 |= SPI_CR1_SPE;
 }
 
-// Simple blocking transmit (1 byte) + receive (full duplex)
 static uint8_t SPI_Transfer(uint8_t data) {
 	while (!SPI_TXE_READY(SPI));
-
-	// Send data
 	SPI->DR = data;
-
-	// Wait until RX buffer not empty (also ensures transfer finished)
 	while (!SPI_RXNE_READY(SPI));
-
-	// Read received byte
 	return (uint8_t) SPI->DR;
 }
-
-// Blocking transmit array (most common use-case)
 static void SPI_Write(uint8_t *data, uint32_t len) {
 	NSS_LOW();
 
 	for (uint32_t i = 0; i < len; i++) {
 		SPI_Transfer(data[i]);
 	}
-
-	// Wait until not busy (important!)
 	while (SPI_BSY(SPI));
 
 	NSS_HIGH();
 }
-
 static void SPI_WriteFill(uint8_t data, uint32_t len) {
 	NSS_LOW();
 
 	for (uint32_t i = 0; i < len; i++) {
 		SPI_Transfer(data);
 	}
-
-	// Wait until not busy (important!)
 	while (SPI_BSY(SPI));
 
 	NSS_HIGH();
@@ -117,10 +90,11 @@ static void command(int count, ...) {
 		else data(byte);
 	}
 
-	va_end(args); // Clean up
+	va_end(args);
 }
 
-void display_init() {
+void display_init(uint8_t isV) {
+	initSPI();
 	RST_HIGH();
 	delay_ms(100);
 	RST_LOW();
@@ -133,7 +107,7 @@ void display_init() {
 
 	reg(0x28); // off
 
-	reg(0x21); // color inversion
+	if (isV) reg(0x21); // color inversion
 	// command(2, 0xC0, 0x23); // power control A
 	// command(2, 0xC1, ____); // power control B
 	// command(3, 0xC5, 0x3E, 0x28); // vcom control 1
@@ -205,28 +179,4 @@ void display_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
 		v /= 10;
 		if (v <= 0) return;
 	}
-}
-
-static int patternA(int x){
-	return ((x*x)&x);
-}
-static int patternB(int x){
-	return (x>>7)&x;
-}
-uint8_t buf[480];
-void display_pattern() {
-	uint8_t c0 = 0b11011010;
-	uint8_t c1 = 0b00000000;
-	uint32_t count = display_setWindow(0, 0, 240, 320);
-	reg(0x2C);
-	for (int y = 0; y < 320; ++y) {
-		for (int x = 0; x < 240; ++x) {
-			int v = (x + 120) ^ y;
-			uint8_t c = patternA(v) > patternB(v) ? 0 : 1;
-			buf[x * 2] = c0 * c;
-			buf[x * 2 + 1] = c1 * c;
-		}
-		stream(buf, 480);
-	}
-	// fill(halfColor, count * 2);
 }
