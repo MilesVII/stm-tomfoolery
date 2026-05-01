@@ -113,7 +113,7 @@ static void display_regInit(void) {
 	reg(0xA6); // Disable Inverse Display On (0xa6/a7)
 }
 
-void display_init() {
+void display0_init() {
 	display_reset();
 	display_initSPI();
 
@@ -124,7 +124,7 @@ void display_init() {
 	reg(0xaf);
 }
 
-void display_clear(void) {
+void display0_clear(void) {
 	uint16_t i, j;
 	for (i = 0; i < 8; ++i) {
 		/* set page address */
@@ -152,7 +152,7 @@ static uint8_t drawChar(uint16_t page, uint16_t row, uint32_t status) {
 	uint8_t low =  hundreds % 10;
 	return (CHARACTERS[low][row] << 4) | (CHARACTERS[high][row]);
 }
-void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
+void display0_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 	uint16_t page, row, x, y;
 
 	/*
@@ -190,7 +190,7 @@ void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 }
 
 static uint8_t bank[128];
-void display_updateTranslated(uint8_t* src) {
+void display0_updateTranslated(uint8_t* src) {
 	/* SRC:
 	...
 	[0x08]...

@@ -94,7 +94,7 @@ static void command(int count, ...) {
 	va_end(args);
 }
 
-void display_init(uint8_t isV) {
+void display1_init(uint8_t isV) {
 	initSPI();
 	RST_HIGH();
 	delay_ms(100);
@@ -132,7 +132,7 @@ void display_init(uint8_t isV) {
 #define SEND16(v) \
 	data(HI(v)); \
 	data(LO(v));
-uint32_t display_setWindow(
+uint32_t display1_setWindow(
 	uint16_t x0, uint16_t y0,
 	uint16_t w, uint16_t h
 ) {
@@ -145,21 +145,21 @@ uint32_t display_setWindow(
 	return w * h;
 }
 
-void display_sendBytes(uint16_t* pixels, uint32_t pixelCount) {
+void display1_sendBytes(uint16_t* pixels, uint32_t pixelCount) {
 	reg(0x2C);
 	stream((uint8_t*)pixels, pixelCount * 2);
 }
 
-void display_clear(uint8_t halfColor, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
-	uint32_t count = display_setWindow(x, y, w, h);
+void display1_clear(uint8_t halfColor, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+	uint32_t count = display1_setWindow(x, y, w, h);
 	reg(0x2C);
 	fill(halfColor, count * 2);
 }
 
-void display_digit(uint16_t* gfx, char v, uint16_t atX, uint16_t atY, uint16_t backColor, uint16_t foreColor) {
+void display1_digit(uint16_t* gfx, char v, uint16_t atX, uint16_t atY, uint16_t backColor, uint16_t foreColor) {
 	uint16_t* cursor = gfx;
 
-	uint32_t pc = display_setWindow(atX, atY, DIGIT_W, DIGIT_H);
+	uint32_t pc = display1_setWindow(atX, atY, DIGIT_W, DIGIT_H);
 	for (int y = DIGIT_H - 1; y >= 0; --y) {
 		uint8_t row = GET_CHARACTER(v)[y/2];
 		for (int x = 0; x < DIGIT_W; ++x) {
@@ -168,22 +168,22 @@ void display_digit(uint16_t* gfx, char v, uint16_t atX, uint16_t atY, uint16_t b
 			++cursor;
 		}
 	}
-	display_sendBytes(gfx, pc);
+	display1_sendBytes(gfx, pc);
 }
 
-void display_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
-	display_clear(0x11, 0, atY, 240, DIGIT_H);
+void display1_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
+	display1_clear(0x11, 0, atY, 240, DIGIT_H);
 	while(1) {
 		atX -= DIGIT_W;
 		uint8_t digit = v % 10;
-		display_digit(gfx, digit, atX, atY, 0x0000, 0xFFFF);
+		display1_digit(gfx, digit, atX, atY, 0x0000, 0xFFFF);
 		v /= 10;
 		if (v <= 0) return;
 	}
 }
-void display_string(uint16_t* gfx, char* v, uint16_t atX, uint16_t atY) {
+void display1_string(uint16_t* gfx, char* v, uint16_t atX, uint16_t atY) {
 	uint16_t l = strlen(v);
 	for (uint16_t i = 0; i < l; ++i) {
-		display_digit(gfx, v[i], atX, atY, 0x0000, 0xFFFF);
+		display1_digit(gfx, v[i], atX, atY, 0x0000, 0xFFFF);
 	}
 }

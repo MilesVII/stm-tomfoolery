@@ -22,14 +22,14 @@ int main(void) {
 
 	LED_INIT();
 	BUTT_INIT();
-	display_init();
-	display_clear();
+	display0_init();
+	display0_clear();
 	tetris_init();
 
 	// uint8_t frame[192];
 	while (1) {
 		tetris_update(gfx);
-		display_updateTranslated(gfx);
+		display0_updateTranslated(gfx);
 
 		uint8_t button = !BUTT_READ();
 		if (button) {
