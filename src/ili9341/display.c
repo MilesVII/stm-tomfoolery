@@ -4,6 +4,7 @@
 #include "font.h"
 #include <math.h>
 #include <stdarg.h>
+#include <string.h>
 
 // 240x320
 #define SPI SPI2
@@ -155,12 +156,12 @@ void display_clear(uint8_t halfColor, uint16_t x, uint16_t y, uint16_t w, uint16
 	fill(halfColor, count * 2);
 }
 
-void display_digit(uint16_t* gfx, uint8_t v, uint16_t atX, uint16_t atY, uint16_t backColor, uint16_t foreColor) {
+void display_digit(uint16_t* gfx, char v, uint16_t atX, uint16_t atY, uint16_t backColor, uint16_t foreColor) {
 	uint16_t* cursor = gfx;
 
 	uint32_t pc = display_setWindow(atX, atY, DIGIT_W, DIGIT_H);
 	for (int y = DIGIT_H - 1; y >= 0; --y) {
-		uint8_t row = CHARACTERS[v][y/2];
+		uint8_t row = GET_CHARACTER(v)[y/2];
 		for (int x = 0; x < DIGIT_W; ++x) {
 			uint8_t bright = row & (1 << (3 - x/2));
 			*cursor = bright ? foreColor : backColor;
@@ -178,5 +179,11 @@ void display_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
 		display_digit(gfx, digit, atX, atY, 0x0000, 0xFFFF);
 		v /= 10;
 		if (v <= 0) return;
+	}
+}
+void display_string(uint16_t* gfx, char* v, uint16_t atX, uint16_t atY) {
+	uint16_t l = strlen(v);
+	for (uint16_t i = 0; i < l; ++i) {
+		display_digit(gfx, v[i], atX, atY, 0x0000, 0xFFFF);
 	}
 }
