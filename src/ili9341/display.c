@@ -187,3 +187,18 @@ void display1_string(uint16_t* gfx, char* v, uint16_t atX, uint16_t atY) {
 		display1_digit(gfx, v[i], atX + DIGIT_W * i, atY, 0x0000, 0xFFFF);
 	}
 }
+void display1_button(uint16_t* gfx, char* caption, uint16_t atX, uint16_t atY, uint16_t w, uint16_t h) {
+	for (int y = 0; y < h; ++y)
+	for (int x = 0; x < w; ++x) {
+		if (y <= 2 || y >= h - 3 || x <= 2 || x >= w - 3) {
+			gfx[x + y * w] = 0xFA;
+		} else {
+			gfx[x + y * w] = 0x00;
+		}
+	}
+	display1_sendBytes(gfx, display1_setWindow(atX, atY, w, h));
+
+	uint16_t tx = atX + (w - DIGIT_W * strlen(caption)) / 2 ;
+	uint16_t ty = atY + (h - DIGIT_H) / 2;
+	display1_string(gfx, caption, tx, ty);
+}

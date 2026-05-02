@@ -79,7 +79,6 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 	C(FONT_8), // 8
 	C(FONT_9), // 9
 	SKIP, // 10
-
 	SKIP, // 11
 	SKIP, // 12
 	SKIP, // 13
@@ -118,11 +117,23 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 	SKIP, // 40/(
 	SKIP, // 41/)
 	SKIP, // 42/*
-	SKIP, // 43/+
+	C(
+		0b0010,
+		0b0010,
+		0b0010,
+		0b0111,
+		0b0010
+	), // 43/+
 	SKIP, // 44/,
 	SKIP, // 45/-
 	SKIP, // 46/.
-	SKIP, // 47//
+	C(
+		0b0001,
+		0b0001,
+		0b0010,
+		0b0100,
+		0b0100
+	), // 47//
 	C(FONT_0), // 48/0
 	C(FONT_1), // 49/1
 	C(FONT_2), // 50/2
@@ -135,11 +146,29 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 	C(FONT_9), // 57/9
 	SKIP, // 58/:
 	SKIP, // 59/;
-	SKIP, // 60/<
+	C(
+		0b0011,
+		0b0110,
+		0b1100,
+		0b0110,
+		0b0011
+	), // 60/<
 	SKIP, // 61/=
-	SKIP, // 62/>
+	C(
+		0b1100,
+		0b0110,
+		0b0011,
+		0b0110,
+		0b1100
+	), // 62/>
 	SKIP, // 63/?
-	SKIP, // 64/@
+	C(
+		0b0110,
+		0b1011,
+		0b1001,
+		0b1000,
+		0b0110
+	), // 64/@
 	C(
 		0b0010,
 		0b0101,

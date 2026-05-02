@@ -7,6 +7,7 @@ arm-none-eabi-gcc ^
 	stm/system_stm32f4xx.c src/hal_at_home.c ^
 	src/sh1106/display.c ^
 	src/ili9341/display.c ^
+	src/ft6336g/touch.c ^
 	src/main.c src/tetris.c ^
 	-o ./bin/firmware.elf
 arm-none-eabi-objcopy -O binary ./bin/firmware.elf ./bin/firmware.bin
