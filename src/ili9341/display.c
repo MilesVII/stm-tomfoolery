@@ -9,11 +9,11 @@
 // 240x320
 #define SPI SPI2
 
-DECLARE_SPI(SCK , B, 10, 5);
+DECLARE_SPI(SCK , B, 13, 5);
 DECLARE_SPI(MOSI, B, 15, 5);
 DECLARE_GPIO_MOUT(NSS, B, 9);
-DECLARE_GPIO_MOUT(RST, B, 2);
-DECLARE_GPIO_MOUT(DC , B, 8);
+DECLARE_GPIO_MOUT(RST, B, 12);
+DECLARE_GPIO_MOUT(DC , B, 14);
 
 static void initSPI() {
 	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
@@ -184,6 +184,6 @@ void display1_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
 void display1_string(uint16_t* gfx, char* v, uint16_t atX, uint16_t atY) {
 	uint16_t l = strlen(v);
 	for (uint16_t i = 0; i < l; ++i) {
-		display1_digit(gfx, v[i], atX, atY, 0x0000, 0xFFFF);
+		display1_digit(gfx, v[i], atX + DIGIT_W * i, atY, 0x0000, 0xFFFF);
 	}
 }
