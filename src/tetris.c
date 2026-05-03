@@ -8,7 +8,13 @@
 		fields \
 	}; \
 	typedef struct name name;
-#define FILL(v, d) for (int i = 0; i < sizeof(v); ++i) { v[i] = d; }
+#define ENUM(name, ...) \
+	enum name { \
+		__VA_ARGS__ \
+	}; \
+	typedef enum name name;
+
+#define FILL(v, d) for (int i = 0; i < (sizeof(v) / sizeof(v[0])); ++i) { v[i] = d; }
 #define AT(x, y, w) ((x) + (y) * (w))
 
 static uint8_t tetris_render(uint8_t x, uint8_t y);
@@ -24,7 +30,65 @@ static uint8_t tetris_render(uint8_t x, uint8_t y);
 static const uint8_t GORGX = (SW - (CELL_SIZE + 1) * GW - 1) / 2;
 static const uint8_t GORGY = (SH - (CELL_SIZE + 1) * GH - 1) / 2;
 
+ENUM(
+	Tetramino,
+	TETRA_I,
+	TETRA_O,
+	TETRA_T,
+	TETRA_S,
+	TETRA_Z,
+	TETRA_L,
+	TETRA_J
+)
+uint8_t TM_I[] = {
+	0, 0, 1, 0,
+	0, 0, 1, 0,
+	0, 0, 1, 0,
+	0, 0, 1, 0
+};
+uint8_t TM_O[] = {
+	0, 0, 0, 0,
+	0, 1, 1, 0,
+	0, 1, 1, 0,
+	0, 0, 0, 0
+};
+uint8_t TM_T[] = {
+	0, 1, 0,
+	1, 1, 1,
+	0, 0, 0
+};
+uint8_t TM_S[] = {
+	0, 1, 0,
+	0, 1, 1,
+	0, 0, 1
+};
+uint8_t TM_Z[] = {
+	0, 1, 0,
+	1, 1, 0,
+	1, 0, 0
+};
+uint8_t TM_L[] = {
+	0, 1, 0,
+	0, 1, 0,
+	0, 1, 1
+};
+uint8_t TM_J[] = {
+	0, 1, 0,
+	0, 1, 0,
+	1, 1, 0
+};
+uint8_t* TETRAMINOS[] = {
+	TM_I,
+	TM_O,
+	TM_T,
+	TM_S,
+	TM_Z,
+	TM_L,
+	TM_J
+};
+
 bool cells[GW * GH];
+bool tetramino[4*4];
 float lineClears[GH];
 
 void tetris_init() {
@@ -32,10 +96,19 @@ void tetris_init() {
 	FILL(lineClears, 0.0);
 }
 
-void tetris_update(uint8_t* gfx) {
+float debugCounter = 0;
+void tetris_update(uint8_t* gfx, uint8_t io, float pdt) {
 	//debug
-	lineClears[19] += .04;
-	if (lineClears[19] > 1) lineClears[19] = 0.0;
+	debugCounter += pdt / 1000.0;
+	while (debugCounter > 2.0) debugCounter -= 2.0;
+	lineClears[19] = debugCounter > 1.0 ? 1.0 : 0.0;
+	cells[0] = debugCounter > 1.0;
+
+	lineClears[8] = 0.0;
+	lineClears[7] = 1.0;
+	lineClears[6] = 0.75;
+	lineClears[10] += .04;
+	if (lineClears[10] > 1.0) lineClears[10] = 0.0;
 
 	for (uint16_t i = 0; i < 1024; ++i) {
 		uint8_t target = 0;
@@ -86,3 +159,17 @@ static uint8_t tetris_render(uint8_t x, uint8_t y) {
 	return 0;
 }
 
+static void loadTetramino(Tetramino t) {
+	// y-down
+	uint8_t sourceSide = t == TETRA_I || t == TETRA_O ? 4 : 3;
+	uint8_t* src = TETRAMINOS[t];
+	for (uint8_t y = 0; y < 4; ++y)
+	for (uint8_t x = 0; x < 4; ++x) {
+		uint8_t i = x + y * 4;
+		if ((x == 3 || y == 3) && sourceSide == 4) {
+			tetramino[i] = 0;
+			continue;
+		}
+		tetramino[i] = src[x + y * sourceSide];
+	}
+}

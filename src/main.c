@@ -5,6 +5,7 @@
 #include "ili9341/display.h"
 #include "ft6336g/touch.h"
 #include "tetris.h"
+#include <math.h>
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
@@ -21,9 +22,14 @@ uint8_t button_touch(
 // button height
 #define BH 64
 
+#define TARGET_FPS 12.0
+const float targetFrameTimeMS = 1000.0 / TARGET_FPS;
+#define DT() (float)DWT->CYCCNT * 1000.0 / SystemCoreClock
+#define DTC() DWT->CYCCNT
+#define DT_RESET() DWT->CYCCNT = 0
+
 uint8_t gfx0[1024];
 uint16_t gfx1[SW * SH / 4];
-
 
 int main(void) {
 	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
@@ -32,6 +38,11 @@ int main(void) {
 		RCC_AHB1ENR_GPIOAEN |
 		RCC_AHB1ENR_GPIOBEN |
 		RCC_AHB1ENR_GPIOCEN;
+	
+	// init DWT cycle counter
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	DWT->CYCCNT = 0;
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
 	LED_INIT();
 	BUTT_INIT();
@@ -43,7 +54,7 @@ int main(void) {
 	display1_clear(0x00, 0, 0, SW, SH);
 	tetris_init();
 
-	#define RECT_START 0, SW - BH - 1, SW, BH
+	#define RECT_START 0, SH - BH - 1, SW, BH
 	#define RECT_Q1 SW / 2, BH, SW / 2, BH
 	#define RECT_Q2      0, BH, SW / 2, BH
 	#define RECT_Q3      0,  0, SW / 2, BH
@@ -51,21 +62,43 @@ int main(void) {
 	display1_button(gfx1, "START/PAUSE", RECT_START);
 	display1_button(gfx1, "< LEFT", RECT_Q3);
 	display1_button(gfx1, "RITE >", RECT_Q4);
-	display1_button(gfx1, "@ ROT", RECT_Q2);
+	display1_button(gfx1, "@ SPIN", RECT_Q2);
 	display1_button(gfx1, "+ DROP", RECT_Q1);
+	// display1_number(gfx1, DTC() % 1000, 230, SH - BH - 1 - DIGIT_H);
 
 	uint16_t touches[] = { 0, 0, 0, 0 };
 	uint8_t touchCount;
+	uint8_t gameIO;
+	float timeMS = 0.0;
+	DT_RESET();
 	while (1) {
-		tetris_update(gfx0);
+		gameIO =
+			(button_touch(touchCount, touches, RECT_Q1) ? TETRIS_IO_D : 0x00) |
+			(button_touch(touchCount, touches, RECT_Q2) ? TETRIS_IO_S : 0x00) |
+			(button_touch(touchCount, touches, RECT_Q3) ? TETRIS_IO_L : 0x00) |
+			(button_touch(touchCount, touches, RECT_Q4) ? TETRIS_IO_R : 0x00);
+		tetris_update(gfx0, gameIO, timeMS);
 		display0_updateTranslated(gfx0);
 		touch_poll(&touchCount, touches, SW);
 
 		uint8_t button = !BUTT_READ();
-		if (button || button_touch(touchCount, touches, RECT_Q1)) {
+		if (touchCount > 0) {
+			display1_clear(0xFF, touches[0], touches[1], 2, 2);
+		}
+		if (button) {
 			ledOn();
 		} else {
 			ledOff();
+		}
+
+		timeMS = DT();
+		DT_RESET();
+		// display1_number(gfx1, (float)timeMS, 230, SH - BH - 1 -  DIGIT_H);
+		if (timeMS < targetFrameTimeMS) {
+			float sleepTimeMS = roundf(targetFrameTimeMS - timeMS);
+			if (sleepTimeMS > 0) delay_ms((uint32_t)sleepTimeMS);
+		} else {
+			// ledOn();
 		}
 	}
 }

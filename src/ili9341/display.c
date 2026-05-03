@@ -11,7 +11,7 @@
 
 DECLARE_SPI(SCK , B, 13, 5);
 DECLARE_SPI(MOSI, B, 15, 5);
-DECLARE_GPIO_MOUT(NSS, B, 9);
+DECLARE_GPIO_MOUT(NSS, A, 8);
 DECLARE_GPIO_MOUT(RST, B, 12);
 DECLARE_GPIO_MOUT(DC , B, 14);
 
@@ -172,7 +172,7 @@ void display1_digit(uint16_t* gfx, char v, uint16_t atX, uint16_t atY, uint16_t 
 }
 
 void display1_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
-	display1_clear(0x11, 0, atY, 240, DIGIT_H);
+	display1_clear(0x0F, 0, atY, 240, DIGIT_H);
 	while(1) {
 		atX -= DIGIT_W;
 		uint8_t digit = v % 10;
@@ -191,9 +191,9 @@ void display1_button(uint16_t* gfx, char* caption, uint16_t atX, uint16_t atY, u
 	for (int y = 0; y < h; ++y)
 	for (int x = 0; x < w; ++x) {
 		if (y <= 2 || y >= h - 3 || x <= 2 || x >= w - 3) {
-			gfx[x + y * w] = 0xFA;
+			gfx[x + y * w] = 0x00FA;
 		} else {
-			gfx[x + y * w] = 0x00;
+			gfx[x + y * w] = 0x0000;
 		}
 	}
 	display1_sendBytes(gfx, display1_setWindow(atX, atY, w, h));

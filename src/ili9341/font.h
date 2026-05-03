@@ -226,11 +226,11 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 		0b0101
 	), // 72/H
 	C(
+		0b0111,
 		0b0010,
 		0b0010,
 		0b0010,
-		0b0010,
-		0b0010
+		0b0111
 	), // 73/I
 	C(
 		0b0111,

@@ -36,7 +36,7 @@ B15 SDI/MOSI
 GPIO:
 B14 DC
 B12 RESET
-B9 CS (soft NSS)
+A8 CS (soft NSS)
 ```
 
 

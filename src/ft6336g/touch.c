@@ -81,11 +81,11 @@ void touch_poll(uint8_t* touchCount, uint16_t* coordinates, uint16_t inversion) 
 	if (*touchCount >= 1) {
 		read_point(coordinates    , I2C_REG_T0_START);
 		coordinates[0] = inversion - coordinates[0];
-		coordinates[1] = inversion - coordinates[1];
+		coordinates[1] = coordinates[1];
 	}
 	if (*touchCount >= 2) {
 		read_point(coordinates + 2, I2C_REG_T1_START);
 		coordinates[2] = inversion - coordinates[2];
-		coordinates[3] = inversion - coordinates[3];
+		coordinates[3] = coordinates[3];
 	}
 }
