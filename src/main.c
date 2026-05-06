@@ -6,6 +6,7 @@
 #include "ft6336g/touch.h"
 #include "tetris.h"
 #include <math.h>
+#include <stdlib.h>
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
@@ -22,7 +23,7 @@ uint8_t button_touch(
 // button height
 #define BH 64
 
-#define TARGET_FPS 12.0
+#define TARGET_FPS 120.0
 const float targetFrameTimeMS = 1000.0 / TARGET_FPS;
 #define DT() (float)DWT->CYCCNT * 1000.0 / SystemCoreClock
 #define DTC() DWT->CYCCNT
@@ -43,6 +44,8 @@ int main(void) {
 	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
 	DWT->CYCCNT = 0;
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+	srand(0); // TODO: use actual enthropy sources
 
 	LED_INIT();
 	BUTT_INIT();
@@ -70,6 +73,9 @@ int main(void) {
 	uint8_t touchCount;
 	uint8_t gameIO;
 	float timeMS = 0.0;
+	float gameMS = 0.0;
+	float tuchMS = 0.0;
+	float dispMS = 0.0;
 	DT_RESET();
 	while (1) {
 		gameIO =
@@ -77,29 +83,41 @@ int main(void) {
 			(button_touch(touchCount, touches, RECT_Q2) ? TETRIS_IO_S : 0x00) |
 			(button_touch(touchCount, touches, RECT_Q3) ? TETRIS_IO_L : 0x00) |
 			(button_touch(touchCount, touches, RECT_Q4) ? TETRIS_IO_R : 0x00);
+
+		DT_RESET();
 		tetris_update(gfx0, gameIO, timeMS);
+		gameMS = DT();
+
+		DT_RESET();
 		display0_updateTranslated(gfx0);
+		dispMS = DT();
+
+		DT_RESET();
 		touch_poll(&touchCount, touches, SW);
+		tuchMS = DT();
 
 		uint8_t button = !BUTT_READ();
-		if (touchCount > 0) {
-			display1_clear(0xFF, touches[0], touches[1], 2, 2);
-		}
 		if (button) {
 			ledOn();
 		} else {
 			ledOff();
 		}
 
-		timeMS = DT();
-		DT_RESET();
-		// display1_number(gfx1, (float)timeMS, 230, SH - BH - 1 -  DIGIT_H);
-		if (timeMS < targetFrameTimeMS) {
-			float sleepTimeMS = roundf(targetFrameTimeMS - timeMS);
-			if (sleepTimeMS > 0) delay_ms((uint32_t)sleepTimeMS);
-		} else {
-			// ledOn();
-		}
+		// game update
+		display1_number(gfx1, (uint16_t)roundf(gameMS* 1000), 230, SH - BH - 1 - DIGIT_H);
+		// display update
+		display1_number(gfx1, (uint16_t)roundf(dispMS * 1000), 230, SH - BH - 1 - DIGIT_H * 2);
+		// touch poll
+		display1_number(gfx1, (uint16_t)roundf(tuchMS * 1000), 230, SH - BH - 1 - DIGIT_H * 3);
+
+		// timeMS = DT();
+		// DT_RESET();
+		// if (timeMS < targetFrameTimeMS) {
+		// 	float sleepTimeMS = roundf(targetFrameTimeMS - timeMS);
+		// 	if (sleepTimeMS > 0) delay_ms((uint32_t)sleepTimeMS);
+		// } else {
+		// 	ledOn();
+		// }
 	}
 }
 

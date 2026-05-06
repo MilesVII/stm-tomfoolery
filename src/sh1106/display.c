@@ -39,23 +39,17 @@ static void display_initSPI() {
 	SPI->CR1 |= SPI_CR1_SPE;
 }
 
-static uint8_t SPI_Transfer(uint8_t data, uint8_t read) {
+static void SPI_Transfer(uint8_t data) {
 	while (!SPI_TXE_READY(SPI));
-
 	SPI->DR = data;
-	while (!SPI_RXNE_READY(SPI));
-
-	if (read)
-		return (uint8_t) SPI->DR;
-	else
-		return (uint8_t) 0;
+	(void)SPI->DR;
+	(void)SPI->SR;
 }
-
-static void SPI_Write(uint8_t *data, uint32_t count) {
+static void SPI_Write(uint8_t *data, uint32_t len) {
 	NSS_LOW();
 
-	for (uint32_t i = 0; i < count; i++) {
-		SPI_Transfer(data[i], 0);
+	for (uint32_t i = 0; i < len; i++) {
+		SPI_Transfer(data[i]);
 	}
 	while (SPI_BSY(SPI));
 

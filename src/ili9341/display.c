@@ -38,11 +38,12 @@ static void initSPI() {
 	SPI->CR1 |= SPI_CR1_SPE;
 }
 
-static uint8_t SPI_Transfer(uint8_t data) {
+static void SPI_Transfer(uint8_t data) {
 	while (!SPI_TXE_READY(SPI));
 	SPI->DR = data;
 	while (!SPI_RXNE_READY(SPI));
-	return (uint8_t) SPI->DR;
+	(void)SPI->DR;
+	(void)SPI->SR;
 }
 static void SPI_Write(uint8_t *data, uint32_t len) {
 	NSS_LOW();
