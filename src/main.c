@@ -55,7 +55,7 @@ int main(void) {
 
 	display0_clear();
 	display1_clear(0x00, 0, 0, SW, SH);
-	tetris_init();
+	tetris_init(gfx0);
 
 	#define RECT_START 0, SH - BH - 1, SW, BH
 	#define RECT_Q1 SW / 2, BH, SW / 2, BH
@@ -93,7 +93,7 @@ int main(void) {
 		dispMS = DT();
 
 		DT_RESET();
-		touch_poll(&touchCount, touches, SW);
+		// touch_poll(&touchCount, touches, SW);
 		tuchMS = DT();
 
 		uint8_t button = !BUTT_READ();

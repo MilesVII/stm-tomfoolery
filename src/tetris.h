@@ -7,5 +7,5 @@
 #define TETRIS_IO_S 0b0100
 #define TETRIS_IO_D 0b1000
 
-void tetris_init();
+void tetris_init(uint8_t* gfx);
 void tetris_update(uint8_t* gfx, uint8_t io, float pdt);

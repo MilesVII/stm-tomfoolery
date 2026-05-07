@@ -42,14 +42,15 @@ static void display_initSPI() {
 static void SPI_Transfer(uint8_t data) {
 	while (!SPI_TXE_READY(SPI));
 	SPI->DR = data;
+	// while (!SPI_RXNE_READY(SPI));
 	(void)SPI->DR;
 	(void)SPI->SR;
 }
-static void SPI_Write(uint8_t *data, uint32_t len) {
+static void SPI_Write(uint8_t *data, uint32_t count, uint32_t stride) {
 	NSS_LOW();
 
-	for (uint32_t i = 0; i < len; i++) {
-		SPI_Transfer(data[i]);
+	for (uint32_t i = 0; i < count; i++) {
+		SPI_Transfer(data[i * stride]);
 	}
 	while (SPI_BSY(SPI));
 
@@ -58,15 +59,19 @@ static void SPI_Write(uint8_t *data, uint32_t len) {
 
 static void reg(uint8_t command) {
 	DC_LOW();
-	SPI_Write(&command, 1);
+	SPI_Write(&command, 1, 1);
 }
 static void data(uint8_t byte) {
 	DC_HIGH();
-	SPI_Write(&byte, 1);
+	SPI_Write(&byte, 1, 1);
+}
+static void stride(uint8_t* byte, uint32_t count, uint32_t stride) {
+	DC_HIGH();
+	SPI_Write(byte, count, stride);
 }
 static void stream(uint8_t* byte, uint32_t count) {
 	DC_HIGH();
-	SPI_Write(byte, count);
+	SPI_Write(byte, count, 1);
 }
 
 static void display_reset(void) {
@@ -183,7 +188,6 @@ void display0_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 	}
 }
 
-static uint8_t bank[128];
 void display0_updateTranslated(uint8_t* src) {
 	/* SRC:
 	...
@@ -204,9 +208,6 @@ void display0_updateTranslated(uint8_t* src) {
 		/* set high column address */
 		reg(0x10);
 
-		for (uint16_t y = 0; y < DISPLAY_H; ++y) {
-			bank[y] = src[page + y * PAGE_CAP];
-		}
-		stream(bank, 128);
+		stride(src + page, 128, PAGE_CAP);
 	}
 }

@@ -22,6 +22,7 @@ static uint8_t tetris_drawGrid(uint8_t x, uint8_t y);
 static void pickTetramino();
 
 #define SW 64 // screen size
+#define SWP (64/8) // (in pages)
 #define SH 128
 #define GW 12 // glass size
 #define GH 22
@@ -103,7 +104,7 @@ STRUCT(CellRenderOffset,
 	uint8_t b0;
 	uint8_t b1;
 );
-CellRenderOffset CELL_RENDER_OFFSETS[GW];
+CellRenderOffset CRO[GW];
 uint8_t tetraminoFeedPointer = 0;
 const V2 TETRAMINO_SPAWN = { GW / 2 - 3, GH - 1 };
 V2 tetraminoPosition;
@@ -130,9 +131,9 @@ void tetris_init(uint8_t* gfx) {
 	for (uint8_t cx = 0; cx < GW; ++cx) {
 		uint8_t x = GORGX + cx * (CELL_SIZE + 1) + 1;
 		uint8_t slide = x % 8;
-		CELL_RENDER_OFFSETS[cx].page = x / 8;
-		CELL_RENDER_OFFSETS[cx].b0 = 0xF0 >> slide;
-		CELL_RENDER_OFFSETS[cx].b1 = 0xF0 << -(slide - 8);
+		CRO[cx].page = x / 8;
+		CRO[cx].b0 = 0x0F << slide;
+		CRO[cx].b1 = 0x0F >> -(slide - 8);
 	}
 }
 
@@ -144,27 +145,22 @@ void tetris_update(uint8_t* gfx, uint8_t io, float pdt) {
 		coldStart = false;
 	}
 
+	cells[AT(0, 0, GW)] = true;
+	cells[AT(1, 1, GW)] = true;
+	cells[AT(2, 2, GW)] = true;
+
 	for (uint8_t cy = 0; cy < GH; ++cy)
 	for (uint8_t cx = 0; cx < GW; ++cx) {
 		bool cv = cells[AT(cx, cy, GW)];
-		uint8_t fromx = GORGX + cx * (CELL_SIZE + 1);
-		uint8_t fromy = GORGY + cy * (CELL_SIZE + 1);
+		uint8_t fromy = GORGY + cy * (CELL_SIZE + 1) + 1;
 
-		if (lineClears[cy]) {
-			for (uint8_t y = fromy; y < fromy + CELL_SIZE + 1; ++y)
-			for (uint8_t x = fromx; x < fromx + CELL_SIZE + 1; ++x) {
-				double eh;
-				float v = modf((x + y) / (float)(CELL_SIZE + 1), &eh);
-				return (v) > lineClears[cy];
-			}
-		} else {
-			for (int y = fromy; y < (fromy + CELL_SIZE); ++y) {
-				int ix = AT(CELL_RENDER_OFFSETS[cx].page, fromy, SW);
-				gfx[ix]     &= ~CELL_RENDER_OFFSETS[cx].b0;
-				gfx[ix]     |= CELL_RENDER_OFFSETS[cx].b0;
-				gfx[ix + 1] &= ~CELL_RENDER_OFFSETS[cx].b1;
-				gfx[ix + 1] |= CELL_RENDER_OFFSETS[cx].b1;
-			}
+		for (int y = 0; y < CELL_SIZE; ++y) {
+			if (lineClears[cy]) cv = 1.0 - (float)y / CELL_SIZE > lineClears[cy];
+			int ix = AT(CRO[cx].page, fromy + y, SWP);
+					gfx[ix]     &= ~CRO[cx].b0;
+			if (cv) gfx[ix]     |=  CRO[cx].b0;
+					gfx[ix + 1] &= ~CRO[cx].b1;
+			if (cv) gfx[ix + 1] |=  CRO[cx].b1;
 		}
 	}
 }
