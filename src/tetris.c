@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <math.h>
+#include "tetris.h"
 
 // utils, move later
 #define STRUCT(name, fields) \
@@ -18,8 +19,12 @@
 #define FILL(v, d) for (int i = 0; i < (sizeof(v) / sizeof(v[0])); ++i) { v[i] = d; }
 #define AT(x, y, w) ((x) + (y) * (w))
 
-static uint8_t tetris_drawGrid(uint8_t x, uint8_t y);
+static uint8_t drawGrid(uint8_t x, uint8_t y);
 static void pickTetramino();
+static bool isLegal(int8_t dx, int8_t dy);
+static void collapse(uint8_t y);
+static void bake();
+static void spin();
 
 #define SW 64 // screen size
 #define SWP (64/8) // (in pages)
@@ -27,13 +32,16 @@ static void pickTetramino();
 #define GW 12 // glass size
 #define GH 22
 #define GHR 20 // glass height rendered
+#define TCAW 4 // tetramino cell array width
 #define CELL_SIZE 4
+#define THB_MS 0.500 // tetramino hover base ms
+#define ICR_MS 0.050 // IO clock rate ms
+#define LCR_MS 0.800 // line clear rate ms
 
 // glass origin with grid
 static const uint8_t GORGX = (SW - (CELL_SIZE + 1) * GW - 1) / 2;
 static const uint8_t GORGY = (SH - (CELL_SIZE + 1) * GH - 1) / 2;
 
-STRUCT(V2, uint8_t x; uint8_t y;)
 ENUM(
 	Tetramino,
 	TETRA_I,
@@ -105,17 +113,34 @@ STRUCT(CellRenderOffset,
 	uint8_t b1;
 );
 CellRenderOffset CRO[GW];
+STRUCT(V2,
+	int8_t x;
+	int8_t y;
+);
+STRUCT(TetraminoState,
+	bool cells[TCAW * TCAW];
+	V2 position;
+	uint8_t side;
+	Tetramino type;
+	float hover;
+);
+TetraminoState tetramino;
+const V2 TETRAMINO_SPAWN = { GW / 2 - 3, GH - 4 };
+
+// tetramino feed
 uint8_t tetraminoFeedPointer = 0;
-const V2 TETRAMINO_SPAWN = { GW / 2 - 3, GH - 1 };
-V2 tetraminoPosition;
+
+// glass
 bool cells[GW * GH];
-bool tetramino[4*4];
-float lineClears[GH];
-bool coldStart = true;
+bool collapsing[GH];
+float lcp = 0; // line collapse progress
+
+float ioCLK = 0;
+bool gameOver = false;
 
 void tetris_init(uint8_t* gfx) {
 	FILL(cells, 0);
-	FILL(lineClears, 0.0);
+	FILL(collapsing, false);
 
 	for (uint16_t i = 0; i < 1024; ++i) {
 		uint8_t target = 0;
@@ -123,7 +148,7 @@ void tetris_init(uint8_t* gfx) {
 		uint16_t xB = i - y * 8;
 		for (uint8_t bit = 0; bit < 8; ++bit) {
 			uint16_t x = xB * 8 + bit;
-			target |= tetris_drawGrid(x, y) << bit;
+			target |= drawGrid(x, y) << bit;
 		}
 		gfx[i] = target;
 	}
@@ -135,27 +160,73 @@ void tetris_init(uint8_t* gfx) {
 		CRO[cx].b0 = 0x0F << slide;
 		CRO[cx].b1 = 0x0F >> -(slide - 8);
 	}
+
+	pickTetramino();
 }
 
 void tetris_update(uint8_t* gfx, uint8_t io, float pdt) {
-	lineClears[10] += .04;
-	if (lineClears[10] > 1.0) lineClears[10] = 0.0;
-	if (coldStart) {
-		pickTetramino();
-		coldStart = false;
+	ioCLK += pdt;
+	if (ioCLK >= ICR_MS) {
+		ioCLK -= ICR_MS;
+	} else {
+		io = 0x00;
 	}
 
-	cells[AT(0, 0, GW)] = true;
-	cells[AT(1, 1, GW)] = true;
-	cells[AT(2, 2, GW)] = true;
+	if (!lcp) {
+		if ((io & TETRIS_IO_L) && isLegal(-1, 0)) tetramino.position.x -= 1;
+		if ((io & TETRIS_IO_R) && isLegal( 1, 0)) tetramino.position.x += 1;
+		if ((io & TETRIS_IO_S)) {
+			spin();
+			tetramino.hover = THB_MS;
+			// jiggle + test
+		}
+		tetramino.hover -= pdt;
+		if (io & TETRIS_IO_D) tetramino.hover = 0;
+	} else {
+		lcp -= pdt;
+		if (lcp <= 0) {
+			lcp = 0;
+			for (int8_t y = GH - 2; y >= 0; --y) {
+				if (collapsing[y]) {
+					collapsing[y] = false;
+					collapse(y);
+				}
+			}
+			pickTetramino();
+		}
+	}
+
+	if (tetramino.hover <= 0) {
+		if (isLegal(0, -1)) {
+			tetramino.position.y -= 1;
+			tetramino.hover = THB_MS;
+		} else {
+			bake();
+			if (!lcp) pickTetramino();
+		}
+	}
 
 	for (uint8_t cy = 0; cy < GH; ++cy)
 	for (uint8_t cx = 0; cx < GW; ++cx) {
 		bool cv = cells[AT(cx, cy, GW)];
+		if (
+			!cv &&
+			cx >= tetramino.position.x &&
+			cy >= tetramino.position.y &&
+			cx < tetramino.position.x + TCAW &&
+			cy < tetramino.position.y + TCAW
+		) {
+			uint8_t tcix = AT(
+				cx - tetramino.position.x,
+				cy - tetramino.position.y,
+				TCAW
+			);
+			cv = tetramino.cells[tcix];
+		}
 		uint8_t fromy = GORGY + cy * (CELL_SIZE + 1) + 1;
 
 		for (int y = 0; y < CELL_SIZE; ++y) {
-			if (lineClears[cy]) cv = 1.0 - (float)y / CELL_SIZE > lineClears[cy];
+			if (collapsing[cy]) cv = 1.0 - (float)y / CELL_SIZE > lcp;
 			int ix = AT(CRO[cx].page, fromy + y, SWP);
 					gfx[ix]     &= ~CRO[cx].b0;
 			if (cv) gfx[ix]     |=  CRO[cx].b0;
@@ -165,7 +236,7 @@ void tetris_update(uint8_t* gfx, uint8_t io, float pdt) {
 	}
 }
 
-static uint8_t tetris_drawGrid(uint8_t x, uint8_t y) {
+static uint8_t drawGrid(uint8_t x, uint8_t y) {
 	if (x >= GORGX && y >= GORGY) {
 		// subcoords
 		uint8_t sx = (x - GORGX) % (CELL_SIZE + 1);
@@ -192,20 +263,6 @@ static uint8_t tetris_drawGrid(uint8_t x, uint8_t y) {
 	return 0;
 }
 
-static void loadTetramino(Tetramino t) {
-	// y-down
-	uint8_t sourceSide = t == TETRA_I || t == TETRA_O ? 4 : 3;
-	uint8_t* src = tetraminoCells[t];
-	for (uint8_t y = 0; y < 4; ++y)
-	for (uint8_t x = 0; x < 4; ++x) {
-		uint8_t i = x + y * 4;
-		if ((x == 3 || y == 3) && sourceSide == 4) {
-			tetramino[i] = 0;
-			continue;
-		}
-		tetramino[i] = src[x + y * sourceSide];
-	}
-}
 static void pickTetramino() {
 	uint8_t count = sizeof(tetraminoFeed) / sizeof(tetraminoFeed[0]);
 	if (tetraminoFeedPointer == 0) {
@@ -220,6 +277,89 @@ static void pickTetramino() {
 
 	Tetramino target = tetraminoFeed[tetraminoFeedPointer++];
 	if (tetraminoFeedPointer >= count) tetraminoFeedPointer = 0;
-	loadTetramino(target);
-	tetraminoPosition = TETRAMINO_SPAWN;
+
+	// load tetramino, y-down
+	uint8_t sourceSide = target == TETRA_I || target == TETRA_O ? 4 : 3;
+	uint8_t* src = tetraminoCells[target];
+	for (uint8_t y = 0; y < TCAW; ++y)
+	for (uint8_t x = 0; x < TCAW; ++x) {
+		uint8_t ix = AT(x, y, TCAW);
+		if ((x >= 3 || y >= 3) && sourceSide == 3) {
+			tetramino.cells[ix] = 0;
+		} else
+			tetramino.cells[ix] = src[x + y * sourceSide];
+	}
+
+	tetramino.position = TETRAMINO_SPAWN;
+	tetramino.side = sourceSide;
+	tetramino.type = target;
+	tetramino.hover = THB_MS;
+}
+
+static bool isLegal(int8_t dx, int8_t dy) {
+	for (uint8_t ty = 0; ty < TCAW; ++ty)
+	for (uint8_t tx = 0; tx < TCAW; ++tx) {
+		bool tcv = tetramino.cells[AT(tx, ty, TCAW)];
+		if (!tcv) continue;
+		// hbound check
+		if (tx + tetramino.position.x + dx < 0) return false;
+		if (tx + tetramino.position.x + dx >= GW) return false;
+
+		// bottom check
+		if (ty + tetramino.position.y + dy < 0) return false;
+
+		// collision check
+		bool cv = cells[AT(
+			tx + tetramino.position.x + dx,
+			ty + tetramino.position.y + dy,
+			GW
+		)];
+		if (cv) return false;
+	}
+	return true;
+}
+
+static void bake() {
+	for (uint8_t ty = 0; ty < TCAW; ++ty)
+	for (uint8_t tx = 0; tx < TCAW; ++tx) {
+		bool tcv = tetramino.cells[AT(tx, ty, TCAW)];
+		if (!tcv) continue;
+		if (ty + tetramino.position.y > GH) gameOver = true;
+		cells[AT(
+			tx + tetramino.position.x,
+			ty + tetramino.position.y,
+			GW
+		)] = tcv;
+	}
+	for (uint8_t cy = 0; cy < GH; ++cy) {
+		for (uint8_t cx = 0; cx < GW; ++cx) {
+			if (!cells[AT(cx, cy, GW)]) goto ROW_INCOMPLETE;
+		}
+		collapsing[cy] = true;
+		lcp = LCR_MS;
+ROW_INCOMPLETE:
+	}
+}
+
+static void collapse(uint8_t y) {
+	for (uint8_t cy = y; cy < GH - 1; ++cy)
+	for (uint8_t cx = 0; cx < GW; ++cx) {
+		cells[AT(cx, cy, GW)] = cells[AT(cx, cy + 1, GW)];
+	}
+}
+
+bool sb[TCAW * TCAW]; // spin buffer
+static void spin() {
+	FILL(sb, false);
+	uint8_t s = tetramino.side;
+	for (uint8_t y = 0; y < TCAW; ++y)
+	for (uint8_t x = 0; x < TCAW; ++x) {
+		// transpose
+		sb[AT(x, y, TCAW)] = tetramino.cells[AT(y, x, TCAW)];
+	}
+	for (uint8_t y = 0; y < TCAW; ++y)
+	for (uint8_t x = 0; x < TCAW; ++x) {
+		// flip
+		tetramino.cells[AT(x, y, TCAW)] = sb[AT(TCAW - x - 1, y, TCAW)];
+	}
 }
