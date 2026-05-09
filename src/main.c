@@ -71,27 +71,22 @@ int main(void) {
 
 	uint16_t touches[] = { 0, 0, 0, 0 };
 	uint8_t touchCount;
-	uint8_t gameIO;
+	uint16_t gameIO;
 	float smolMS = 0.0;
 	float fullMS = 0.0;
-	// float tuchMS = 0.0;
-	// float dispMS = 0.0;
 	while (1) {
 		DT_RESET();
 		gameIO =
+			(gameIO << 8) |
 			(button_touch(touchCount, touches, RECT_Q1) ? TETRIS_IO_D : 0x00) |
 			(button_touch(touchCount, touches, RECT_Q2) ? TETRIS_IO_S : 0x00) |
 			(button_touch(touchCount, touches, RECT_Q3) ? TETRIS_IO_L : 0x00) |
-			(button_touch(touchCount, touches, RECT_Q4) ? TETRIS_IO_R : 0x00);
+			(button_touch(touchCount, touches, RECT_Q4) ? TETRIS_IO_R : 0x00) |
+			(button_touch(touchCount, touches, RECT_START) ? TETRIS_IO_P : 0x00);
 
 		tetris_update(gfx0, gameIO, fullMS);
-		// gameMS = DT();
-
 		display0_updateTranslated(gfx0);
-		// dispMS = DT();
-
 		touch_poll(&touchCount, touches, SW);
-		// tuchMS = DT();
 
 		uint8_t button = !BUTT_READ();
 		if (button) {
@@ -101,13 +96,6 @@ int main(void) {
 		}
 
 		// game update
-		// display1_number(gfx1, (uint16_t)roundf(gameMS* 1000), 230, SH - BH - 1 - DIGIT_H);
-		// display update
-		// display1_number(gfx1, (uint16_t)roundf(dispMS * 1000), 230, SH - BH - 1 - DIGIT_H * 2);
-		// touch poll
-		// display1_number(gfx1, (uint16_t)roundf(tuchMS * 1000), 230, SH - BH - 1 - DIGIT_H * 3);
-
-		// display1_number(gfx1, (uint16_t)roundf(timeMS * 1000), 230, SH - BH - 1 - DIGIT_H);
 		smolMS = DT();
 		if (smolMS < targetFrameTimeMS) {
 			float sleepTimeMS = roundf(targetFrameTimeMS - smolMS);

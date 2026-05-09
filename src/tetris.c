@@ -18,6 +18,8 @@
 
 #define FILL(v, d) for (int i = 0; i < (sizeof(v) / sizeof(v[0])); ++i) { v[i] = d; }
 #define AT(x, y, w) ((x) + (y) * (w))
+#define IO_PREV(io) (io >> 8)
+#define IO_DOWN(v, io) (io & v) && !(IO_PREV(io) & v)
 
 static uint8_t drawGrid(uint8_t x, uint8_t y);
 static void pickTetramino();
@@ -25,6 +27,7 @@ static bool isLegal(int8_t dx, int8_t dy);
 static void collapse(uint8_t y);
 static void bake();
 static void spin();
+static bool jiggle();
 
 #define SW 64 // screen size
 #define SWP (64/8) // (in pages)
@@ -34,9 +37,9 @@ static void spin();
 #define GHR 20 // glass height rendered
 #define TCAW 4 // tetramino cell array width
 #define CELL_SIZE 4
-#define THB_MS 0.500 // tetramino hover base ms
-#define ICR_MS 0.050 // IO clock rate ms
-#define LCR_MS 0.800 // line clear rate ms
+#define THB_MS 200 // tetramino hover base ms
+#define LCR_MS 800 // line clear rate ms
+#define IOCD_MS 100
 
 // glass origin with grid
 static const uint8_t GORGX = (SW - (CELL_SIZE + 1) * GW - 1) / 2;
@@ -121,7 +124,6 @@ STRUCT(TetraminoState,
 	bool cells[TCAW * TCAW];
 	V2 position;
 	uint8_t side;
-	Tetramino type;
 	float hover;
 );
 TetraminoState tetramino;
@@ -134,9 +136,10 @@ uint8_t tetraminoFeedPointer = 0;
 bool cells[GW * GH];
 bool collapsing[GH];
 float lcp = 0; // line collapse progress
+float iocd = 0;
 
-float ioCLK = 0;
 bool gameOver = false;
+bool paused = false;
 
 void tetris_init(uint8_t* gfx) {
 	FILL(cells, 0);
@@ -164,45 +167,66 @@ void tetris_init(uint8_t* gfx) {
 	pickTetramino();
 }
 
-void tetris_update(uint8_t* gfx, uint8_t io, float pdt) {
-	ioCLK += pdt;
-	if (ioCLK >= ICR_MS) {
-		ioCLK -= ICR_MS;
-	} else {
-		io = 0x00;
+void tetris_update(uint8_t* gfx, uint16_t io, float pdt) {
+	if (IO_DOWN(TETRIS_IO_P, io)) paused = !paused;
+	if (paused) return;
+	if (io & TETRIS_IO_D) pdt *= 2.7;
+
+	if (gameOver) {
+		if (!gfx[0])
+			for (int i = 0; i < 1024; ++i)
+				gfx[i] = ~gfx[i];
+		return;
 	}
 
-	if (!lcp) {
-		if ((io & TETRIS_IO_L) && isLegal(-1, 0)) tetramino.position.x -= 1;
-		if ((io & TETRIS_IO_R) && isLegal( 1, 0)) tetramino.position.x += 1;
-		if ((io & TETRIS_IO_S)) {
-			spin();
-			tetramino.hover = THB_MS;
-			// jiggle + test
-		}
-		tetramino.hover -= pdt;
-		if (io & TETRIS_IO_D) tetramino.hover = 0;
+	if (
+		IO_DOWN(TETRIS_IO_L, io) ||
+		IO_DOWN(TETRIS_IO_R, io)
+	) {
+		iocd = 0;
 	} else {
+		iocd += pdt;
+		if (iocd > IOCD_MS) iocd = 0;
+	}
+
+	if (lcp) {
 		lcp -= pdt;
 		if (lcp <= 0) {
 			lcp = 0;
-			for (int8_t y = GH - 2; y >= 0; --y) {
-				if (collapsing[y]) {
-					collapsing[y] = false;
-					collapse(y);
+			for (uint8_t y = 0; y < GH; ++y) {
+				if (collapsing[GH - y - 1]) {
+					collapsing[GH - y - 1] = false;
+					collapse(GH - y - 1);
 				}
 			}
 			pickTetramino();
 		}
-	}
+	} else {
+		bool willbake = isLegal(0, -1);
+		if ((io & TETRIS_IO_L) && iocd <= 0 && isLegal(-1, 0)) {
+			tetramino.position.x -= 1;
+			if (willbake) tetramino.hover = THB_MS;
+		}
+		if ((io & TETRIS_IO_R) && iocd <= 0 && isLegal( 1, 0)) {
+			tetramino.position.x += 1;
+			if (willbake) tetramino.hover = THB_MS;
+		}
+		if (IO_DOWN(TETRIS_IO_S, io)) {
+			spin();
+			if (isLegal(0, 0) || jiggle()) {
+				tetramino.hover = THB_MS;
+			}
+		}
+		tetramino.hover -= pdt;
 
-	if (tetramino.hover <= 0) {
-		if (isLegal(0, -1)) {
-			tetramino.position.y -= 1;
-			tetramino.hover = THB_MS;
-		} else {
-			bake();
-			if (!lcp) pickTetramino();
+		if (tetramino.hover <= 0) {
+			if (willbake) {
+				tetramino.position.y -= 1;
+				tetramino.hover = THB_MS;
+			} else {
+				bake();
+				if (!lcp) pickTetramino();
+			}
 		}
 	}
 
@@ -226,7 +250,7 @@ void tetris_update(uint8_t* gfx, uint8_t io, float pdt) {
 		uint8_t fromy = GORGY + cy * (CELL_SIZE + 1) + 1;
 
 		for (int y = 0; y < CELL_SIZE; ++y) {
-			if (collapsing[cy]) cv = 1.0 - (float)y / CELL_SIZE > lcp;
+			if (collapsing[cy]) cv = (float)y / CELL_SIZE < (lcp / LCR_MS);
 			int ix = AT(CRO[cx].page, fromy + y, SWP);
 					gfx[ix]     &= ~CRO[cx].b0;
 			if (cv) gfx[ix]     |=  CRO[cx].b0;
@@ -292,7 +316,6 @@ static void pickTetramino() {
 
 	tetramino.position = TETRAMINO_SPAWN;
 	tetramino.side = sourceSide;
-	tetramino.type = target;
 	tetramino.hover = THB_MS;
 }
 
@@ -324,7 +347,7 @@ static void bake() {
 	for (uint8_t tx = 0; tx < TCAW; ++tx) {
 		bool tcv = tetramino.cells[AT(tx, ty, TCAW)];
 		if (!tcv) continue;
-		if (ty + tetramino.position.y > GH) gameOver = true;
+		if (ty + tetramino.position.y > GHR) gameOver = true;
 		cells[AT(
 			tx + tetramino.position.x,
 			ty + tetramino.position.y,
@@ -352,14 +375,46 @@ bool sb[TCAW * TCAW]; // spin buffer
 static void spin() {
 	FILL(sb, false);
 	uint8_t s = tetramino.side;
-	for (uint8_t y = 0; y < TCAW; ++y)
-	for (uint8_t x = 0; x < TCAW; ++x) {
+	for (uint8_t y = 0; y < s; ++y)
+	for (uint8_t x = 0; x < s; ++x) {
 		// transpose
-		sb[AT(x, y, TCAW)] = tetramino.cells[AT(y, x, TCAW)];
+		sb[AT(y, x, TCAW)] = tetramino.cells[AT(x, y, TCAW)];
 	}
-	for (uint8_t y = 0; y < TCAW; ++y)
-	for (uint8_t x = 0; x < TCAW; ++x) {
+	for (uint8_t y = 0; y < s; ++y)
+	for (uint8_t x = 0; x < s; ++x) {
 		// flip
-		tetramino.cells[AT(x, y, TCAW)] = sb[AT(TCAW - x - 1, y, TCAW)];
+		tetramino.cells[AT(x, y, TCAW)] = sb[AT(s - x - 1, y, TCAW)];
 	}
+}
+static void unspin() {
+	FILL(sb, false);
+	uint8_t s = tetramino.side;
+	for (uint8_t y = 0; y < s; ++y)
+	for (uint8_t x = 0; x < s; ++x) {
+		// flip
+		sb[AT(x, y, TCAW)] = tetramino.cells[AT(s - x - 1, y, TCAW)];
+	}
+	for (uint8_t y = 0; y < s; ++y)
+	for (uint8_t x = 0; x < s; ++x) {
+		// transpose
+		tetramino.cells[AT(y, x, TCAW)] = sb[AT(x, y, TCAW)];
+	}
+}
+
+V2 jiggleDeltas[] = {
+	{-1, 0},
+	{ 1, 0},
+	{-2, 0},
+	{ 2, 0}
+};
+static bool jiggle() {
+	for (int i = 0; i < 4; ++i) {
+		if (isLegal(jiggleDeltas[i].x, jiggleDeltas[i].y)) {
+			tetramino.position.x += jiggleDeltas[i].x;
+			tetramino.position.y += jiggleDeltas[i].y;
+			return true;
+		}
+	}
+	unspin();
+	return false;
 }
