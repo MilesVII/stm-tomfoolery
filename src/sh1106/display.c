@@ -39,23 +39,18 @@ static void display_initSPI() {
 	SPI->CR1 |= SPI_CR1_SPE;
 }
 
-static uint8_t SPI_Transfer(uint8_t data, uint8_t read) {
+static void SPI_Transfer(uint8_t data) {
 	while (!SPI_TXE_READY(SPI));
-
 	SPI->DR = data;
-	while (!SPI_RXNE_READY(SPI));
-
-	if (read)
-		return (uint8_t) SPI->DR;
-	else
-		return (uint8_t) 0;
+	// while (!SPI_RXNE_READY(SPI));
+	(void)SPI->DR;
+	(void)SPI->SR;
 }
-
-static void SPI_Write(uint8_t *data, uint32_t count) {
+static void SPI_Write(uint8_t *data, uint32_t count, uint32_t stride) {
 	NSS_LOW();
 
 	for (uint32_t i = 0; i < count; i++) {
-		SPI_Transfer(data[i], 0);
+		SPI_Transfer(data[i * stride]);
 	}
 	while (SPI_BSY(SPI));
 
@@ -64,15 +59,19 @@ static void SPI_Write(uint8_t *data, uint32_t count) {
 
 static void reg(uint8_t command) {
 	DC_LOW();
-	SPI_Write(&command, 1);
+	SPI_Write(&command, 1, 1);
 }
 static void data(uint8_t byte) {
 	DC_HIGH();
-	SPI_Write(&byte, 1);
+	SPI_Write(&byte, 1, 1);
+}
+static void stride(uint8_t* byte, uint32_t count, uint32_t stride) {
+	DC_HIGH();
+	SPI_Write(byte, count, stride);
 }
 static void stream(uint8_t* byte, uint32_t count) {
 	DC_HIGH();
-	SPI_Write(byte, count);
+	SPI_Write(byte, count, 1);
 }
 
 static void display_reset(void) {
@@ -113,7 +112,7 @@ static void display_regInit(void) {
 	reg(0xA6); // Disable Inverse Display On (0xa6/a7)
 }
 
-void display_init() {
+void display0_init() {
 	display_reset();
 	display_initSPI();
 
@@ -124,7 +123,7 @@ void display_init() {
 	reg(0xaf);
 }
 
-void display_clear(void) {
+void display0_clear(void) {
 	uint16_t i, j;
 	for (i = 0; i < 8; ++i) {
 		/* set page address */
@@ -152,7 +151,7 @@ static uint8_t drawChar(uint16_t page, uint16_t row, uint32_t status) {
 	uint8_t low =  hundreds % 10;
 	return (CHARACTERS[low][row] << 4) | (CHARACTERS[high][row]);
 }
-void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
+void display0_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 	uint16_t page, row, x, y;
 
 	/*
@@ -189,8 +188,7 @@ void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 	}
 }
 
-static uint8_t bank[128];
-void display_updateTranslated(uint8_t* src) {
+void display0_updateTranslated(uint8_t* src) {
 	/* SRC:
 	...
 	[0x08]...
@@ -210,9 +208,6 @@ void display_updateTranslated(uint8_t* src) {
 		/* set high column address */
 		reg(0x10);
 
-		for (uint16_t y = 0; y < DISPLAY_H; ++y) {
-			bank[y] = src[page + y * PAGE_CAP];
-		}
-		stream(bank, 128);
+		stride(src + page, 128, PAGE_CAP);
 	}
 }
