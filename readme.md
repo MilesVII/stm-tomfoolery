@@ -2,6 +2,10 @@
 Pure CMSIS drivers, no HAL
 
 # pins
+## unusable (blackpill board)
+`A11`, `A12`, `B2`
+avoid: `A9`, `A10`
+
 ## 25Q64JVSIQ
 8MiB flash chip
 
@@ -26,13 +30,13 @@ LED(ignored) -> 3V via 100ohm
 
 SPI2 AF5:
 (hanging) SDO/MISO
-B10 SCK
+B13 SCK
 B15 SDI/MOSI
 
 GPIO:
-B8 DC
-B2 RESET
-B9 CS (soft NSS)
+B14 DC
+B12 RESET
+A8 CS (soft NSS)
 ```
 
 
