@@ -173,7 +173,7 @@ void display1_digit(uint16_t* gfx, char v, uint16_t atX, uint16_t atY, uint16_t 
 }
 
 void display1_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
-	display1_clear(0x0F, 0, atY, 240, DIGIT_H);
+	display1_clear(0x00, 0, atY, 240, DIGIT_H);
 	while(1) {
 		atX -= DIGIT_W;
 		uint8_t digit = v % 10;

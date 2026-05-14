@@ -167,7 +167,7 @@ void tetris_init(uint8_t* gfx) {
 	pickTetramino();
 }
 
-void tetris_update(uint8_t* gfx, uint16_t io, float pdt) {
+void tetris_update(uint8_t* gfx, uint16_t io, float pdt, uint16_t* score) {
 	if (IO_DOWN(TETRIS_IO_P, io)) paused = !paused;
 	if (paused) return;
 	if (io & TETRIS_IO_D) pdt *= 2.7;
@@ -224,7 +224,7 @@ void tetris_update(uint8_t* gfx, uint16_t io, float pdt) {
 				tetramino.position.y -= 1;
 				tetramino.hover = THB_MS;
 			} else {
-				bake();
+				bake(score);
 				if (!lcp) pickTetramino();
 			}
 		}
@@ -342,7 +342,7 @@ static bool isLegal(int8_t dx, int8_t dy) {
 	return true;
 }
 
-static void bake() {
+static void bake(uint16_t* score) {
 	for (uint8_t ty = 0; ty < TCAW; ++ty)
 	for (uint8_t tx = 0; tx < TCAW; ++tx) {
 		bool tcv = tetramino.cells[AT(tx, ty, TCAW)];
@@ -354,13 +354,19 @@ static void bake() {
 			GW
 		)] = tcv;
 	}
+	uint8_t linesCleared = 0;
 	for (uint8_t cy = 0; cy < GH; ++cy) {
 		for (uint8_t cx = 0; cx < GW; ++cx) {
 			if (!cells[AT(cx, cy, GW)]) goto ROW_INCOMPLETE;
 		}
 		collapsing[cy] = true;
+		++linesCleared;
 		lcp = LCR_MS;
 ROW_INCOMPLETE:
+	}
+	if (linesCleared > 0) {
+		*score += linesCleared * linesCleared;
+		*score = *score | TETRIS_SCORE_DIRTY;
 	}
 }
 

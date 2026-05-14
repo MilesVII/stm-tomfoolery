@@ -57,11 +57,12 @@ int main(void) {
 	display1_clear(0x00, 0, 0, SW, SH);
 	tetris_init(gfx0);
 
-	#define RECT_START 0, SH - BH - 1, SW, BH
-	#define RECT_Q1 SW / 2, BH, SW / 2, BH
-	#define RECT_Q2      0, BH, SW / 2, BH
-	#define RECT_Q3      0,  0, SW / 2, BH
-	#define RECT_Q4 SW / 2,  0, SW / 2, BH
+	#define ST(row) SH - BH * ((row) + 1) - 1
+	#define RECT_START   0, ST(0), SW, BH
+	#define RECT_Q1 SW / 2, ST(1), SW / 2, BH
+	#define RECT_Q2      0, ST(1), SW / 2, BH
+	#define RECT_Q3      0, ST(2), SW / 2, BH
+	#define RECT_Q4 SW / 2, ST(2), SW / 2, BH
 	display1_button(gfx1, "START/PAUSE", RECT_START);
 	display1_button(gfx1, "< LEFT", RECT_Q3);
 	display1_button(gfx1, "RITE >", RECT_Q4);
@@ -72,6 +73,7 @@ int main(void) {
 	uint16_t touches[] = { 0, 0, 0, 0 };
 	uint8_t touchCount;
 	uint16_t gameIO;
+	uint16_t score = TETRIS_SCORE_DIRTY;
 	float smolMS = 0.0;
 	float fullMS = 0.0;
 	while (1) {
@@ -84,9 +86,13 @@ int main(void) {
 			(button_touch(touchCount, touches, RECT_Q4) ? TETRIS_IO_R : 0x00) |
 			(button_touch(touchCount, touches, RECT_START) ? TETRIS_IO_P : 0x00);
 
-		tetris_update(gfx0, gameIO, fullMS);
+		tetris_update(gfx0, gameIO, fullMS, &score);
 		display0_updateTranslated(gfx0);
 		touch_poll(&touchCount, touches, SW);
+		if (score & TETRIS_SCORE_DIRTY) {
+			score = score & ~TETRIS_SCORE_DIRTY;
+			display1_number(gfx1, score, SW, 0);
+		}
 
 		uint8_t button = !BUTT_READ();
 		if (button) {
