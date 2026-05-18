@@ -82,4 +82,13 @@
 	static    void name##_INIT() { PUPDR(GPIO##port, pin, 1); } \
 	static uint8_t name##_READ() { return GPIO##port->IDR & (1 << pin); }
 
+// DWT cycle counter
+#define DWTCC_DT() (float)DWT->CYCCNT * 1000.0 / SystemCoreClock
+#define DWTCC_DTC() DWT->CYCCNT
+#define DWTCC_DT_RESET() DWT->CYCCNT = 0
+#define DWTCC_INIT() \
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; \
+	DWT->CYCCNT = 0; \
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; \
+
 void delay_ms(uint32_t ms);

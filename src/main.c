@@ -55,7 +55,7 @@ int main(void) {
 			status(cycles ? 0x0F : 0xF0);
 		}
 
-		touch_poll(&touchCount, touches);
+		touch_poll(&touchCount, touches, 240);
 		line(touchCount, 0);
 		uint8_t button = !BUTT_READ();
 		if (button || touchCount > 0) {
