@@ -3,9 +3,7 @@
 #include "stm32f411xe.h"
 #include <stdint.h>
 
-#define PIN_SET(port, pin) ((port)->BSRR = (pin))
-#define PIN_CLR(port, pin) ((port)->BSRR = ((pin) << 16))
-
+// common CMSIS utils
 #define _POW2_1 2
 #define _POW2_2 4
 #define _POW2_3 8
@@ -16,39 +14,81 @@
 	l &= ~((_POW2(size) - 1) << (offset * size)); \
 	l |=  (            value << (offset * size));
 
+#define PIN_SET(port, pin) ((port)->BSRR = (pin))
+#define PIN_CLR(port, pin) ((port)->BSRR = ((pin) << 16))
+
 #define MODER(port, pin, mode)      BIT_ASSIGN(port->MODER  , pin, 2, mode)
-// pins 0-7 only
-#define AFR(port, pin, range, mode) BIT_ASSIGN(port->AFR[range], pin, 4, mode) // todo range
+#define AFR(port, pin, mode)        BIT_ASSIGN(port->AFR[pin < 8 ? 0 : 1], pin % 8, 4, mode)
 #define OSPEEDR(port, pin, mode)    BIT_ASSIGN(port->OSPEEDR, pin, 2, mode)
 #define OTYPER(port, pin, mode)     BIT_ASSIGN(port->OTYPER,  pin, 1, mode)
+#define PUPDR(port, pin, mode)      BIT_ASSIGN(port->PUPDR,   pin, 2, mode)
 
-#define GPIO_PIN(v)  ((uint16_t)(1 << v))
+#define GPIO_PIN(v) ((uint16_t)(1 << v))
 
+// SPI utils
 #define SPI_TXE_READY(spi)  (((spi)->SR & SPI_SR_TXE)  != 0)
 #define SPI_RXNE_READY(spi) (((spi)->SR & SPI_SR_RXNE) != 0)
 #define SPI_BSY(spi)        (((spi)->SR & SPI_SR_BSY)  != 0)
 
+// I2C utils
 #define I2C_START(i2c) \
 	(i2c)->CR1 |= I2C_CR1_START; \
 	while(!((i2c)->SR1 & I2C_SR1_SB));
 #define I2C_STOP(i2c) \
 	(i2c)->CR1 |= I2C_CR1_STOP; \
 	while((i2c)->SR2 & I2C_SR2_BUSY);
-#define I2C_ADDRESS(i2c, address) \
-	(i2c)->DR = (address); \
-	while (!((i2c)->SR1 & I2C_SR1_ADDR));
 #define I2C_FLUSH(i2c) \
 	(void)(i2c)->SR1; \
 	(void)(i2c)->SR2;
+#define I2C_ADDRESS(i2c, address) \
+	(i2c)->DR = (address); \
+	while (!((i2c)->SR1 & I2C_SR1_ADDR));
+#define I2C_ADDRESS_W(i2c, address) \
+	I2C_ADDRESS(i2c, (address) << 1) \
+	I2C_FLUSH(i2c)
+#define I2C_ADDRESS_R(i2c, address) \
+	I2C_ADDRESS(i2c, ((address) << 1) | 1) \
+	I2C_FLUSH(i2c)
 #define I2C_SEND(i2c, payload) \
 	(i2c)->DR = (payload); \
 	while (!((i2c)->SR1 & I2C_SR1_TXE));
 #define I2C_READ(i2c, dst) \
 	while (!((i2c)->SR1 & I2C_SR1_RXNE)); \
-	uint8_t (dst) = (i2c)->DR;
+	(dst) = (i2c)->DR;
 #define I2C_ACK_IN(i2c) \
 	(i2c)->CR1 |= I2C_CR1_ACK;
 #define I2C_ACK_OUT(i2c) \
 	(i2c)->CR1 &= ~I2C_CR1_ACK;
+
+// pin control utils
+#define DECLARE_SPI(name, port, pin, afr) \
+	static void name##_INIT() { \
+		MODER(GPIO##port, pin, 2); \
+		AFR(GPIO##port, pin, afr); \
+		OSPEEDR(GPIO##port, pin, 3); \
+	}
+#define DECLARE_I2C(name, port, pin, afr) \
+	static void name##_INIT() { \
+		MODER(GPIO##port, pin, 2); \
+		AFR(GPIO##port, pin, afr); \
+		OSPEEDR(GPIO##port, pin, 3) \
+		OTYPER(GPIO##port, pin, 1);\
+	}
+#define DECLARE_GPIO_MOUT(name, port, pin) \
+	static void name##_HIGH() { PIN_SET(GPIO##port, GPIO_PIN(pin)); } \
+	static void name##_LOW()  { PIN_CLR(GPIO##port, GPIO_PIN(pin)); } \
+	static void name##_INIT() { MODER(GPIO##port, pin, 1); name##_HIGH(); }
+#define DECLARE_GPIO_MIN(name, port, pin) \
+	static    void name##_INIT() { PUPDR(GPIO##port, pin, 1); } \
+	static uint8_t name##_READ() { return GPIO##port->IDR & (1 << pin); }
+
+// DWT cycle counter
+#define DWTCC_DT() (float)DWT->CYCCNT * 1000.0 / SystemCoreClock
+#define DWTCC_DTC() DWT->CYCCNT
+#define DWTCC_DT_RESET() DWT->CYCCNT = 0
+#define DWTCC_INIT() \
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; \
+	DWT->CYCCNT = 0; \
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; \
 
 void delay_ms(uint32_t ms);

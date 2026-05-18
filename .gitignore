@@ -1,3 +1,3 @@
 bin
-badapol/*
-!badapol/makeframes.ts
+makeframes/node_modules
+makeframes/frames

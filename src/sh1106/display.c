@@ -1,5 +1,5 @@
 #include "stm32f411xe.h"
-#include "hal_at_home.h"
+#include "../hal_at_home.h"
 #include "display.h"
 #include "font.h"
 #include <math.h>
@@ -7,109 +7,71 @@
 #define DISPLAY_W  64
 #define DISPLAY_H 128
 
-/*
-64x128
-A5 SCK
-A7 MOSI
+// 64x128
 
-B0 D/C
-B1 RESET
-B10 CS
-*/
+#define SPI SPI1
+DECLARE_SPI(SCK, A, 5, 5);
+DECLARE_SPI(MOSI, A, 7, 5);
+DECLARE_GPIO_MOUT(NSS, A, 6);
+DECLARE_GPIO_MOUT(RST, B, 1);
+DECLARE_GPIO_MOUT(DC, B, 0);
 
-
-#define SCK_PORT    GPIOA
-#define SCK_PIN     5
-
-#define MOSI_PORT   GPIOA
-#define MOSI_PIN    7
-
-#define NSS_PORT    GPIOB
-#define NSS_PIN     5
-#define NSS_HIGH()  PIN_SET(NSS_PORT, GPIO_PIN(NSS_PIN))
-#define NSS_LOW()   PIN_CLR(NSS_PORT, GPIO_PIN(NSS_PIN))
-
-#define RST_PORT    GPIOA
-#define RST_PIN     9
-#define RST_HIGH()  PIN_SET(RST_PORT, GPIO_PIN(RST_PIN))
-#define RST_LOW()   PIN_CLR(RST_PORT, GPIO_PIN(RST_PIN))
-
-#define DC_PORT     GPIOA
-#define DC_PIN      8
-#define DC_HIGH()   PIN_SET(DC_PORT, GPIO_PIN(DC_PIN))
-#define DC_LOW()    PIN_CLR(DC_PORT, GPIO_PIN(DC_PIN))
-
-#define SPI_PIN_INIT(pin) \
-	MODER(pin##_PORT, pin##_PIN, 2); \
-	AFR(pin##_PORT, pin##_PIN, 0, 5); \
-	OSPEEDR(pin##_PORT, pin##_PIN, 3);
-#define OUT_PIN_INIT(pin) \
-	MODER(pin##_PORT, pin##_PIN, 1); \
-	pin##_HIGH();
-
-void display_initSPI() {
+static void display_initSPI() {
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
-	SPI_PIN_INIT(SCK);
-	SPI_PIN_INIT(MOSI);
-
-	OUT_PIN_INIT(NSS);
-	OUT_PIN_INIT(DC);
-	OUT_PIN_INIT(RST);
+	SCK_INIT();
+	MOSI_INIT();
+	NSS_INIT();
+	DC_INIT();
+	RST_INIT();
 
 	// clear
-	SPI1->CR1 = 0;
-	SPI1->CR2 = 0;
+	SPI->CR1 = 0;
+	SPI->CR2 = 0;
 
-	SPI1->CR1 =
+	SPI->CR1 =
 		SPI_CR1_MSTR |
 		SPI_CR1_SSI  |
-		SPI_CR1_SSM  |
-		SPI_CR1_BR_2 | SPI_CR1_BR_1 |
-		SPI_CR1_SPE;
-	SPI1->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
+		SPI_CR1_SSM;
+		// SPI_CR1_BR_2 | SPI_CR1_BR_1;
+	SPI->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
 
-	SPI1->CR2 = (7 << 8);
+	SPI->CR1 |= SPI_CR1_SPE;
 }
 
-// Simple blocking transmit (1 byte) + receive (full duplex)
-static uint8_t SPI1_Transfer(uint8_t data, uint8_t read) {
-	while (!SPI_TXE_READY(SPI1));
-
-	// Send data
-	SPI1->DR = data;
-
-	// Wait until RX buffer not empty (also ensures transfer finished)
-	while (!SPI_RXNE_READY(SPI1));
-
-	// Read received byte
-	if (read)
-		return (uint8_t) SPI1->DR;
-	else
-		return (uint8_t) 0;
+static void SPI_Transfer(uint8_t data) {
+	while (!SPI_TXE_READY(SPI));
+	SPI->DR = data;
+	// while (!SPI_RXNE_READY(SPI));
+	(void)SPI->DR;
+	(void)SPI->SR;
 }
-
-// Blocking transmit array (most common use-case)
-static void SPI1_Write(uint8_t *data, uint32_t len) {
+static void SPI_Write(uint8_t *data, uint32_t count, uint32_t stride) {
 	NSS_LOW();
 
-	for (uint32_t i = 0; i < len; i++) {
-		SPI1_Transfer(data[i], 0);
+	for (uint32_t i = 0; i < count; i++) {
+		SPI_Transfer(data[i * stride]);
 	}
-
-	// Wait until not busy (important!)
-	while (SPI_BSY(SPI1));
+	while (SPI_BSY(SPI));
 
 	NSS_HIGH();
 }
 
 static void reg(uint8_t command) {
 	DC_LOW();
-	SPI1_Write(&command, 1);
+	SPI_Write(&command, 1, 1);
 }
 static void data(uint8_t byte) {
 	DC_HIGH();
-	SPI1_Write(&byte, 1);
+	SPI_Write(&byte, 1, 1);
+}
+static void stride(uint8_t* byte, uint32_t count, uint32_t stride) {
+	DC_HIGH();
+	SPI_Write(byte, count, stride);
+}
+static void stream(uint8_t* byte, uint32_t count) {
+	DC_HIGH();
+	SPI_Write(byte, count, 1);
 }
 
 static void display_reset(void) {
@@ -150,23 +112,19 @@ static void display_regInit(void) {
 	reg(0xA6); // Disable Inverse Display On (0xa6/a7)
 }
 
-void display_init() {
-	//Hardware reset
+void display0_init() {
 	display_reset();
+	display_initSPI();
 
-	//Set the initialization register
 	display_regInit();
 	delay_ms(200);
 
-	//Turn on the OLED display
+	// Turn on
 	reg(0xaf);
 }
 
-void display_clear(void) {
-	// UWORD Width, Height;
+void display0_clear(void) {
 	uint16_t i, j;
-	// Width = (OLED_1IN3_WIDTH % 8 == 0)? (OLED_1IN3_WIDTH / 8 ): (OLED_1IN3_WIDTH / 8 + 1);
-	// Height = OLED_1IN3_HEIGHT;
 	for (i = 0; i < 8; ++i) {
 		/* set page address */
 		reg(0xB0 + i);
@@ -181,32 +139,10 @@ void display_clear(void) {
 	}
 }
 
-void display_update(uint8_t targetPage) {
-	uint16_t page, row, temp;
-
-	for (page = 0; page < 8; ++page) {
-		/* set page address */
-		reg(0xB0 + page);
-		/* set low column address */
-		reg(0x02);
-		/* set high column address */
-		reg(0x10);
-
-		/* write data */
-		for(row = 0; row < 128; ++row) {
-			if (page == targetPage && (row / 8 == targetPage)) {
-				data(0xFF);
-			} else {
-				data(0x00);
-			}
-			// temp = 0xF0; //Image[(7-page) + column*8];
-		}
-	}
-}
-
 #define PAGE_CAP (DISPLAY_W / 8)
 #define CHAR_CAP 10 // PAGE_CAP * 2;
 static uint8_t drawChar(uint16_t page, uint16_t row, uint32_t status) {
+	return 0;
 	int exp = CHAR_CAP / 2 - 1 - page;
 	if (exp < 0) return 0;
 
@@ -216,7 +152,7 @@ static uint8_t drawChar(uint16_t page, uint16_t row, uint32_t status) {
 	uint8_t low =  hundreds % 10;
 	return (CHARACTERS[low][row] << 4) | (CHARACTERS[high][row]);
 }
-void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
+void display0_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 	uint16_t page, row, x, y;
 
 	/*
@@ -250,5 +186,29 @@ void display_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 				data(frame[x * 32 + y]);
 			}
 		}
+	}
+}
+
+void display0_updateTranslated(uint8_t* src) {
+	/* SRC:
+	...
+	[0x08]...
+	[0x00][0x01][0x02][0x03][0x04][0x05][0x06][0x07]
+	*/
+	/* memory pages:
+	[row2]
+	[row1]
+	[row0]
+	x [p0] [p1] [p2] etc
+	*/
+	for (uint16_t page = 0; page < PAGE_CAP; ++page) {
+		/* set page address */
+		reg(0xB0 + page);
+		/* set low column address */
+		reg(0x02);
+		/* set high column address */
+		reg(0x10);
+
+		stride(src + page, 128, PAGE_CAP);
 	}
 }
