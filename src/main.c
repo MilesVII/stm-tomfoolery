@@ -159,7 +159,7 @@ void update(float pdt, uint8_t button) {
 		state.init = 1;
 	}
 
-	if (!state.running && button) {
+	if (state.running < REEL_COUNT && button) {
 		state.running = REEL_COUNT;
 		state.win = 0;
 		for (int i = 0; i < REEL_COUNT; ++i) {
