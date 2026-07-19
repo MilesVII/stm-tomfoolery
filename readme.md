@@ -1,10 +1,36 @@
 # STM32F411
 Pure CMSIS drivers, no HAL
 
+C13-14-15 | A0-A7 | B0-1-2 B10
+B9-B3 | A15 A12-A8 | B15-B12
+
 # pins
 ## unusable (blackpill board)
 `A11`, `A12`, `B2`
 avoid: `A9`, `A10`
+
+## OV7670
+```
+I2C1 AF4:
+B6 SCL
+B7 SDA
+
+pixels:
+D0 A8
+D1 A9
+D2 A10
+D3 A11
+D4 A12
+D5 A15
+D6 B3
+D7 B4
+
+clocks:
+PLK B5
+XLK B8
+HS  B9
+
+```
 
 ## 25Q64JVSIQ
 8MiB flash chip

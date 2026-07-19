@@ -151,6 +151,21 @@ void display1_sendBytes(uint16_t* pixels, uint32_t pixelCount) {
 	stream((uint8_t*)pixels, pixelCount * 2);
 }
 
+void display1_sendBytesIndexed(uint8_t* pixels, uint16_t* palette, uint32_t pixelCount) {
+	reg(0x2C);
+	DC_HIGH();
+	NSS_LOW();
+
+	for (uint32_t i = 0; i < pixelCount; i++) {
+		uint16_t v = palette[pixels[i]];
+		SPI_Transfer(v >> 8);
+		SPI_Transfer(v & 0xFF);
+	}
+	while (SPI_BSY(SPI));
+
+	NSS_HIGH();
+}
+
 void display1_clear(uint8_t halfColor, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
 	uint32_t count = display1_setWindow(x, y, w, h);
 	reg(0x2C);
