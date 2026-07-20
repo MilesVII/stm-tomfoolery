@@ -11,25 +11,28 @@ avoid: `A9`, `A10`
 
 ## OV7670
 ```
+RST B2
+PWDN B1
+HS  B9
+VS  A1
+
 I2C1 AF4:
 B6 SCL
 B7 SDA
 
 pixels:
-D0 A8
-D1 A9
-D2 A10
-D3 A11
-D4 A12
-D5 A15
-D6 B3
-D7 B4
+D0 A9
+D1 A10
+D2 A11
+D3 A12
+D4 A15
+D5 B3
+D6 B4
+D7 B5
 
 clocks:
-PLK B5
+PLK A0
 XLK B8
-HS  B9
-
 ```
 
 ## 25Q64JVSIQ
