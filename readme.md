@@ -13,7 +13,7 @@ avoid: `A9`, `A10`
 ```
 RST B2
 PWDN B1
-HS  B9
+HS  B9 -> A3
 VS  A1
 
 I2C1 AF4:
@@ -31,7 +31,7 @@ D6 B4
 D7 B5
 
 clocks:
-PLK A0
+PLK A2
 XLK B8
 ```
 

@@ -91,4 +91,21 @@
 	DWT->CYCCNT = 0; \
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; \
 
+#define CLOCK_TIM_CLK 16000000UL
+#define DECLARE_CLOCK(name, port, pin) \
+	static void name##_INIT(uint32_t freq_hz) { \
+		RCC->APB1ENR |= RCC_APB1ENR_TIM4EN; \
+		MODER(GPIO##port, pin, 2); \
+		AFR(GPIO##port, pin, 2); \
+		OSPEEDR(GPIO##port, pin, 3); \
+		uint32_t arr = (CLOCK_TIM_CLK / freq_hz) - 1; \
+		TIM4->PSC = 0; \
+		TIM4->ARR = arr; \
+		TIM4->CCR3 = (arr + 1) / 2; \
+		TIM4->CCMR2 = (TIM4->CCMR2 & ~TIM_CCMR2_OC3M) | (6 << 4) | TIM_CCMR2_OC3PE; \
+		TIM4->CCER |= TIM_CCER_CC3E; \
+		TIM4->EGR |= TIM_EGR_UG; \
+		TIM4->CR1 |= TIM_CR1_ARPE | TIM_CR1_CEN; \
+	}
+
 void delay_ms(uint32_t ms);

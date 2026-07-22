@@ -7,7 +7,6 @@
 
 
 #define I2C_DEVICE 0x21
-// #define I2C_DEVICE_R 0x43
 
 #define I2C I2C1
 
@@ -26,11 +25,11 @@ DECLARE_GPIO_MIN(D5, A, 3)
 DECLARE_GPIO_MIN(D6, B, 4)
 DECLARE_GPIO_MIN(D7, B, 5)
 
-DECLARE_GPIO_MIN(PCLK, A, 0)
-DECLARE_GPIO_MIN(HS, B, 9)
+DECLARE_GPIO_MIN(PCLK, A, 2)
+DECLARE_GPIO_MIN(HS, A, 3)
 DECLARE_GPIO_MIN(VS, A, 1)
-// DECLARE_GPIO_MOUT(XCLK, B, 8)
 
+DECLARE_CLOCK(XCLK, B, 8)
 
 static void set(uint8_t reg, uint8_t v) {
 	I2C_START(I2C);
@@ -64,9 +63,6 @@ void camera_init() {
 	RST_INIT(); RST_HIGH();
 	PWDN_INIT(); PWDN_LOW();
 
-	PCLK_INIT();
-	HS_INIT();
-
 	D0_INIT();
 	D1_INIT();
 	D2_INIT();
@@ -75,6 +71,12 @@ void camera_init() {
 	D5_INIT();
 	D6_INIT();
 	D7_INIT();
+
+	PCLK_INIT();
+	HS_INIT();
+	VS_INIT();
+
+	XCLK_INIT(8000000); // 8 MHz
 
 	I2C->CR1 = I2C_CR1_SWRST;
 	I2C->CR1 = 0;
@@ -87,14 +89,18 @@ void camera_init() {
 	RST_LOW();
 	delay_ms(100);
 	RST_HIGH();
+	delay_ms(100);
 
 	// https://github.com/Ursadon/ov7670-stm32/blob/master/drivers/ov7670/ov7670.c
 
 	int hstart = 456, hstop = 24, vstart = 14, vstop = 494;
 	uint8_t v;
 	set(REG_COM7, COM7_RESET);
+	delay_ms(10);
 	set(REG_CLKRC, 0x01);
-	set(REG_COM7, COM7_FMT_QVGA | COM7_PBAYER); /* output format: YUCV */
+	set(REG_COM7, COM7_FMT_QVGA | COM7_YUV);
+	set(REG_COM10, COM10_PCLK_HB);
+	delay_ms(10);
 
 	set(REG_HSTART, (hstart >> 3) & 0xff);
 	set(REG_HSTOP, (hstop >> 3) & 0xff);
@@ -108,38 +114,54 @@ void camera_init() {
 	v = (v & 0xf0) | ((vstop & 0x3) << 2) | (vstart & 0x3);
 	set(REG_VREF, v);
 
-
-	// set(REG_COM5, 0x61);
-	// set(REG_COM6, 0x4b);
-	// set(0x16, 0x02);
-	// set(REG_MVFP, 0x07);
-	// set(0x21, 0x02);
-	// set(0x22, 0x91);
-	// set(0x29, 0x07);
-	// set(0x33, 0x0b);
-	// set(0x35, 0x0b);
-	// set(0x37, 0x1d);
-	// set(0x38, 0x71);
-	// set(0x39, 0x2a);
-	// set(REG_COM12, 0x78);
-	// set(0x4d, 0x40);
-	// set(0x4e, 0x20);
-	// set(REG_GFIX, 0);
-	// set(0x6b, 0x4a);
-	// set(0x74, 0x10);
-	// set(0x8d, 0x4f);
-	// set(0x8e, 0);
-	// set(0x8f, 0);
-	// set(0x90, 0);
-	// set(0x91, 0);
-	// set(0x96, 0);
-	// set(0x9a, 0);
-	// set(0xb0, 0x84);
-	// set(0xb1, 0x0c);
-	// set(0xb2, 0x0e);
-	// set(0xb3, 0x82);
-	// set(0xb8, 0x0a);
+	delay_ms(300);
 }
 
-void camera_frame() {}
 
+DECLARE_GPIO_MOUT(LED, C, 13);
+DECLARE_GPIO_MIN(BUTT, A, 0);
+
+void ledOff() {
+	LED_HIGH();
+}
+void ledOn() {
+	LED_LOW();
+}
+
+
+void camera_frame(uint8_t* fb) {
+	delay_ms(400);
+
+	size_t tp;
+	uint8_t chromaSkip = 0;
+	uint16_t col = 0;
+	uint16_t row = 0;
+	while (VS_READ()); // wait for vsync to drop
+	do {
+		// while (!HS_READ()); // wait for href to rise
+		while (!PCLK_READ()); // wait for PCLK to rise
+		if (!chromaSkip) {
+			tp = col * 240 + row;
+			fb[tp] =
+				(!!D0_READ()) << 0 |
+				(!!D1_READ()) << 1 |
+				(!!D2_READ()) << 2 |
+				(!!D3_READ()) << 3 |
+				(!!D4_READ()) << 4 |
+				(!!D5_READ()) << 5 |
+				(!!D6_READ()) << 6 |
+				(!!D7_READ()) << 7;
+			++col;
+		}
+		chromaSkip = !chromaSkip;
+
+		if (col == 320) {
+			// chromaSkip = 0;
+			col = 0;
+			++row;
+			// return; //dbg
+		}
+		if (row == 240) return;
+		while (PCLK_READ()); // wait for PCLK to fall
+	} while(!VS_READ());
+}
