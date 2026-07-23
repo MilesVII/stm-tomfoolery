@@ -97,71 +97,72 @@ void camera_init() {
 	uint8_t v;
 	set(REG_COM7, COM7_RESET);
 	delay_ms(10);
-	set(REG_CLKRC, 0x01);
-	set(REG_COM7, COM7_FMT_QVGA | COM7_YUV);
-	set(REG_COM10, COM10_PCLK_HB);
-	delay_ms(10);
+	set(REG_CLKRC, 0x07);
+	set(REG_COM7, COM7_FMT_QVGA | COM7_RGB);
+	delay_ms(400);
 
-	set(REG_HSTART, (hstart >> 3) & 0xff);
-	set(REG_HSTOP, (hstop >> 3) & 0xff);
-	v = get(REG_HREF);
-	v = (v & 0xc0) | ((hstop & 0x7) << 3) | (hstart & 0x7);
-	set(REG_HREF, v);
+	// set(REG_HSTART, (hstart >> 3) & 0xff);
+	// set(REG_HSTOP, (hstop >> 3) & 0xff);
+	// v = get(REG_HREF);
+	// v = (v & 0xc0) | ((hstop & 0x7) << 3) | (hstart & 0x7);
+	// set(REG_HREF, v);
 
-	set(REG_VSTART, (vstart >> 2) & 0xff);
-	set(REG_VSTOP, (vstop >> 2) & 0xff);
-	v = get(REG_VREF);
-	v = (v & 0xf0) | ((vstop & 0x3) << 2) | (vstart & 0x3);
-	set(REG_VREF, v);
+	// set(REG_VSTART, (vstart >> 2) & 0xff);
+	// set(REG_VSTOP, (vstop >> 2) & 0xff);
+	// v = get(REG_VREF);
+	// v = (v & 0xf0) | ((vstop & 0x3) << 2) | (vstart & 0x3);
+	// set(REG_VREF, v);
 
 	delay_ms(300);
 }
 
+uint8_t reduce(uint16_t rgb565) {
+	uint8_t r = (rgb565 >> 13) & 0x07;
+	uint8_t g = (rgb565 >> 8)  & 0x07;
+	uint8_t b = (rgb565 >> 3)  & 0x03;
 
-DECLARE_GPIO_MOUT(LED, C, 13);
-DECLARE_GPIO_MIN(BUTT, A, 0);
-
-void ledOff() {
-	LED_HIGH();
-}
-void ledOn() {
-	LED_LOW();
+	return (r << 5) | (g << 2) | b;
 }
 
+uint8_t collectByte() {
+	while (!PCLK_READ()); // wait for PCLK to rise
+
+	uint8_t v =
+		(!!D0_READ()) << 0 |
+		(!!D1_READ()) << 1 |
+		(!!D2_READ()) << 2 |
+		(!!D3_READ()) << 3 |
+		(!!D4_READ()) << 4 |
+		(!!D5_READ()) << 5 |
+		(!!D6_READ()) << 6 |
+		(!!D7_READ()) << 7;
+
+	while (PCLK_READ()); // wait for PCLK to fall
+
+	return v;
+}
 
 void camera_frame(uint8_t* fb) {
 	delay_ms(400);
 
 	size_t tp;
-	uint8_t chromaSkip = 0;
+	uint8_t lo, hi;
 	uint16_t col = 0;
 	uint16_t row = 0;
 	while (VS_READ()); // wait for vsync to drop
 	do {
-		// while (!HS_READ()); // wait for href to rise
-		while (!PCLK_READ()); // wait for PCLK to rise
-		if (!chromaSkip) {
-			tp = col * 240 + row;
-			fb[tp] =
-				(!!D0_READ()) << 0 |
-				(!!D1_READ()) << 1 |
-				(!!D2_READ()) << 2 |
-				(!!D3_READ()) << 3 |
-				(!!D4_READ()) << 4 |
-				(!!D5_READ()) << 5 |
-				(!!D6_READ()) << 6 |
-				(!!D7_READ()) << 7;
+		while (!HS_READ()); // wait for href to rise
+		col = 0;
+		do {
+			// tp = col * 240 + row;
+			tp = row * 240 + col;
+			lo = collectByte();
+			if (!HS_READ()) break;
+			hi = collectByte();
+			if (col < 240) fb[tp] = reduce((hi << 8) | lo);
 			++col;
-		}
-		chromaSkip = !chromaSkip;
-
-		if (col == 320) {
-			// chromaSkip = 0;
-			col = 0;
-			++row;
-			// return; //dbg
-		}
+		} while(HS_READ());
+		++row;
 		if (row == 240) return;
-		while (PCLK_READ()); // wait for PCLK to fall
 	} while(!VS_READ());
 }

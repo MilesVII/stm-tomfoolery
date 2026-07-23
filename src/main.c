@@ -20,6 +20,21 @@ uint16_t yuv422PaletteGrayscale(const uint8_t y) {
 
 	return (r5 << 11) | (g6 << 5) | b5;
 }
+uint16_t redPaletteGrayscale(const uint8_t v) {
+	return v << 8;
+}
+
+uint16_t hydrate(uint8_t rgb332) {
+	uint16_t r = (rgb332 >> 5) & 0x07;
+	uint16_t g = (rgb332 >> 2) & 0x07;
+	uint16_t b =  rgb332       & 0x03;
+
+	uint16_t r5 = (r << 2) | (r >> 1);
+	uint16_t g6 = (g << 3) | (g << 0); 
+	uint16_t b5 = (b << 3) | (b << 1) | (b >> 1);
+
+	return (r5 << 11) | (g6 << 5) | b5;
+}
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
@@ -47,7 +62,7 @@ int main(void) {
 		RCC_AHB1ENR_GPIOBEN |
 		RCC_AHB1ENR_GPIOCEN;
 
-	for (uint16_t i = 0; i < 256; ++i) gfxPalette[i] = yuv422PaletteGrayscale(i);
+	for (uint16_t i = 0; i < 256; ++i) gfxPalette[i] = hydrate(i);
 
 	LED_INIT();
 	BUTT_INIT();
@@ -62,20 +77,6 @@ int main(void) {
 	uint16_t touches[4] = { 0, 0, 0, 0 };
 	while (1) {
 		camera_frame(gfx);
-		ledOn();
 		display1_sendBytesIndexed(gfx, gfxPalette, 240 * 320);
-
-		// uint8_t button = !BUTT_READ();
-		// if (button) {
-		// 	ledOn();
-		// } else {
-		// 	ledOff();
-		// }
-
-		// delay_ms(32);
-		cycles = (cycles + 1) % 32;
-		if (cycles == 0 || cycles == 16) {
-			status(cycles ? 0x0F : 0xFF);
-		}
 	}
 }

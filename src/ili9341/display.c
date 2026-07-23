@@ -151,7 +151,7 @@ void display1_sendBytes(uint16_t* pixels, uint32_t pixelCount) {
 	stream((uint8_t*)pixels, pixelCount * 2);
 }
 
-void display1_sendBytesIndexed(uint8_t* pixels, uint16_t* palette, uint32_t pixelCount) {
+void display1_sendBytesIndexed(const uint8_t* pixels, const uint16_t* palette, uint32_t pixelCount) {
 	reg(0x2C);
 	DC_HIGH();
 	NSS_LOW();
