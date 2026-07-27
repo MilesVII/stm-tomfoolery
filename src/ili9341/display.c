@@ -8,6 +8,9 @@
 
 // 240x320
 #define SPI SPI2
+#define DMA_SPI_TX DMA1_Stream4
+#define DMA_SPI_TX_IRQn DMA1_Stream4_IRQn
+#define DMA_SPI_TX_IRQHandler DMA1_Stream4_IRQHandler
 
 DECLARE_SPI(SCK , B, 13, 5);
 DECLARE_SPI(MOSI, B, 15, 5);
@@ -37,6 +40,8 @@ static void initSPI() {
 	
 	SPI->CR1 |= SPI_CR1_SPE;
 }
+
+static void initDMA(void);
 
 static void SPI_Transfer(uint8_t data) {
 	while (!SPI_TXE_READY(SPI));
@@ -97,6 +102,7 @@ static void command(int count, ...) {
 
 void display1_init(uint8_t isV) {
 	initSPI();
+	initDMA();
 	RST_HIGH();
 	delay_ms(100);
 	RST_LOW();
@@ -164,6 +170,114 @@ void display1_sendBytesIndexed(const uint8_t* pixels, const uint16_t* palette, u
 	while (SPI_BSY(SPI));
 
 	NSS_HIGH();
+}
+
+// ---------------------------------------------------------------------------
+// DMA support
+//
+// SPI2 TX is on DMA1 Stream 4 Channel 0 (RM0090 rev19 Table 43).
+// We use a small static line buffer and feed the DMA in chunks so the source
+// buffer can live in flash (no need for a full 240*320*2 RAM framebuffer).
+// ---------------------------------------------------------------------------
+
+#define DMA_LINE_PIXELS 240
+static uint16_t dma_line_buffer[DMA_LINE_PIXELS];
+static volatile uint8_t dma_busy;
+
+static void initDMA(void) {
+	RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+
+	DMA_SPI_TX->CR = 0;
+	while (DMA_SPI_TX->CR & DMA_SxCR_EN);
+
+	DMA_SPI_TX->PAR = (uint32_t)&SPI->DR;
+	DMA_SPI_TX->M0AR = (uint32_t)dma_line_buffer;
+	DMA_SPI_TX->CR =
+		(0 << DMA_SxCR_CHSEL_Pos) |   // channel 0
+		DMA_SxCR_PL_1 |               // high priority
+		DMA_SxCR_MINC |               // memory increment
+		DMA_SxCR_DIR_1 |              // memory -> peripheral
+		DMA_SxCR_TCIE;                // transfer complete interrupt
+
+	NVIC_EnableIRQ(DMA_SPI_TX_IRQn);
+}
+
+void DMA_SPI_TX_IRQHandler(void) {
+	if (DMA1->HISR & DMA_HISR_TCIF4) {
+		DMA1->HIFCR = DMA_HIFCR_CTCIF4;
+		SPI->CR2 &= ~SPI_CR2_TXDMAEN;
+		while (SPI_BSY(SPI));
+		NSS_HIGH();
+		dma_busy = 0;
+	}
+}
+
+void display1_waitDMA(void) {
+	while (dma_busy) {
+		__NOP();
+	}
+}
+
+void display1_sendBytesDMA(const uint16_t* pixels, uint32_t pixelCount) {
+	display1_waitDMA();
+
+	reg(0x2C);
+	DC_HIGH();
+
+	dma_busy = 1;
+	NSS_LOW();
+
+	while (DMA_SPI_TX->CR & DMA_SxCR_EN);
+	DMA_SPI_TX->M0AR = (uint32_t)pixels;
+	DMA_SPI_TX->NDTR = pixelCount * 2;
+	DMA_SPI_TX->CR =
+		(0 << DMA_SxCR_CHSEL_Pos) |
+		DMA_SxCR_PL_1 |
+		DMA_SxCR_MINC |
+		DMA_SxCR_DIR_1 |
+		DMA_SxCR_TCIE |
+		DMA_SxCR_EN;
+
+	SPI->CR2 |= SPI_CR2_TXDMAEN;
+}
+
+void display1_sendBytesIndexedDMA(const uint8_t* pixels, const uint16_t* palette, uint32_t pixelCount) {
+	reg(0x2C);
+	DC_HIGH();
+
+	dma_busy = 1;
+	NSS_LOW();
+
+	uint32_t sent = 0;
+	while (sent < pixelCount) {
+		uint32_t chunk = pixelCount - sent;
+		if (chunk > DMA_LINE_PIXELS) chunk = DMA_LINE_PIXELS;
+
+		for (uint32_t i = 0; i < chunk; i++) {
+			dma_line_buffer[i] = palette[pixels[sent + i]];
+		}
+
+		display1_waitDMA();
+		// Note: waitDMA resets dma_busy to 0 after first iteration, keep it set.
+		dma_busy = 1;
+
+		while (DMA_SPI_TX->CR & DMA_SxCR_EN);
+		DMA_SPI_TX->M0AR = (uint32_t)dma_line_buffer;
+		DMA_SPI_TX->NDTR = chunk * 2;
+		DMA_SPI_TX->CR =
+			(0 << DMA_SxCR_CHSEL_Pos) |
+			DMA_SxCR_PL_1 |
+			DMA_SxCR_MINC |
+			DMA_SxCR_DIR_1 |
+			DMA_SxCR_TCIE |
+			DMA_SxCR_EN;
+
+		SPI->CR2 |= SPI_CR2_TXDMAEN;
+
+		sent += chunk;
+	}
+
+	display1_waitDMA();
 }
 
 void display1_clear(uint8_t halfColor, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {

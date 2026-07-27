@@ -5,6 +5,7 @@ arm-none-eabi-gcc ^
 	-T stm/STM32F411CEUX_FLASH.ld ^
 	stm/startup_stm32f411xe-gcc.s ^
 	stm/system_stm32f4xx.c src/hal_at_home.c ^
+	src/flash25q64.c ^
 	src/ili9341/display.c ^
 	src/picture.S ^
 	src/main.c ^
