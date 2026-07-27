@@ -6,7 +6,6 @@ arm-none-eabi-gcc ^
 	stm/startup_stm32f411xe-gcc.s ^
 	stm/system_stm32f4xx.c src/hal_at_home.c ^
 	src/ili9341/display.c ^
-	src/ov7670/camera.c ^
 	src/picture.S ^
 	src/main.c ^
 	-o ./bin/firmware.elf
