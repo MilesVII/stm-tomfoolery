@@ -92,12 +92,12 @@
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; \
 
 #define CLOCK_TIM_CLK 16000000UL
-#define DECLARE_CLOCK(name, port, pin) \
+#define DECLARE_CLOCK_B8(name) \
 	static void name##_INIT(uint32_t freq_hz) { \
 		RCC->APB1ENR |= RCC_APB1ENR_TIM4EN; \
-		MODER(GPIO##port, pin, 2); \
-		AFR(GPIO##port, pin, 2); \
-		OSPEEDR(GPIO##port, pin, 3); \
+		MODER(GPIOB, 8, 2); \
+		AFR(GPIOB, 8, 2); \
+		OSPEEDR(GPIOB, 8, 3); \
 		uint32_t arr = (CLOCK_TIM_CLK / freq_hz) - 1; \
 		TIM4->PSC = 0; \
 		TIM4->ARR = arr; \

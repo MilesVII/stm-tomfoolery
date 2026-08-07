@@ -12,24 +12,24 @@
 
 DECLARE_I2C(SCL, B, 6, 4)
 DECLARE_I2C(SDA, B, 7, 4)
-DECLARE_GPIO_MOUT(RST, B, 2)
-DECLARE_GPIO_MOUT(PWDN, B, 1)
+DECLARE_GPIO_MOUT(RST, B, 3)
+DECLARE_GPIO_MOUT(PWDN, A, 15)
 
 // pixel bus
-DECLARE_GPIO_MIN(D0, A, 9)
-DECLARE_GPIO_MIN(D1, A, 10)
-DECLARE_GPIO_MIN(D2, A, 11)
-DECLARE_GPIO_MIN(D3, A, 12)
-DECLARE_GPIO_MIN(D4, A, 15)
-DECLARE_GPIO_MIN(D5, A, 3)
-DECLARE_GPIO_MIN(D6, B, 4)
-DECLARE_GPIO_MIN(D7, B, 5)
+DECLARE_GPIO_MIN(D0, A, 0)
+DECLARE_GPIO_MIN(D1, A, 1)
+DECLARE_GPIO_MIN(D2, A, 2)
+DECLARE_GPIO_MIN(D3, A, 3)
+DECLARE_GPIO_MIN(D4, A, 4)
+DECLARE_GPIO_MIN(D5, A, 5)
+DECLARE_GPIO_MIN(D6, A, 6)
+DECLARE_GPIO_MIN(D7, A, 7)
 
-DECLARE_GPIO_MIN(PCLK, A, 2)
-DECLARE_GPIO_MIN(HS, A, 3)
-DECLARE_GPIO_MIN(VS, A, 1)
+DECLARE_GPIO_MIN(PCLK, B, 0)
+DECLARE_GPIO_MIN(HS, B, 4)
+DECLARE_GPIO_MIN(VS, B, 5)
 
-DECLARE_CLOCK(XCLK, B, 8)
+DECLARE_CLOCK_B8(XCLK)
 
 static void set(uint8_t reg, uint8_t v) {
 	I2C_START(I2C);
@@ -37,7 +37,6 @@ static void set(uint8_t reg, uint8_t v) {
 	I2C_SEND(I2C, reg);
 	I2C_SEND(I2C, v);
 	I2C_STOP(I2C);
-	delay(20);
 }
 
 static uint8_t get(uint8_t reg) {
@@ -282,7 +281,19 @@ uint8_t collectByte() {
 	return v;
 }
 
+
+DECLARE_GPIO_MOUT(LED, C, 13);
+DECLARE_GPIO_MIN(BUTT, A, 0);
+
+void ledOff() {
+	LED_HIGH();
+}
+void ledOn() {
+	LED_LOW();
+}
+
 void camera_frame(uint8_t* fb) {
+	delay_ms(300);
 	size_t tp;
 	uint8_t y;
 	uint16_t col = 0;
@@ -293,6 +304,7 @@ void camera_frame(uint8_t* fb) {
 		col = 0;
 		do {
 			uint8_t y0 = collectByte();
+			ledOn();
 			if (!HS_READ()) break;
 			uint8_t u  = collectByte();
 			if (!HS_READ()) break;
