@@ -1,33 +1,93 @@
-
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "flash25q64.h"
+#include "tusb.h"
+#include "board.h"
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
 
 static void ledOff() {
-	LED_HIGH();
+    LED_HIGH();
 }
 static void ledOn() {
-	LED_LOW();
+    LED_LOW();
+}
+
+// Hard fault indicator: LED on solid
+void HardFault_Handler(void) {
+    // Ensure GPIOC is enabled and PC13 is output
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+    GPIOC->MODER |= (1U << (13 * 2));
+    ledOn();
+    while (1) __NOP();
+}
+
+// Simple busy-wait delay using CPU cycles.
+// Must be used BEFORE SysTick is configured in board_init().
+static void delay_ms_blocking(uint32_t ms) {
+    // At 16 MHz HSI this is roughly 16k cycles/ms; at 84 MHz roughly 84k cycles/ms.
+    // Using a conservative value that works at both speeds.
+    for (uint32_t i = 0; i < ms; i++) {
+        for (volatile uint32_t d = 0; d < 4000; d++) __NOP();
+    }
 }
 
 int main(void) {
-	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
+    // Very first sanity indicator: turn LED on before any init.
+    // If the LED never lights up, the chip is not executing from flash.
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+    GPIOC->MODER |= (1U << (13 * 2));
+    ledOn();
+    delay_ms_blocking(200);
+    ledOff();
+    delay_ms_blocking(200);
 
-	RCC->AHB1ENR |=
-		RCC_AHB1ENR_GPIOAEN |
-		RCC_AHB1ENR_GPIOBEN |
-		RCC_AHB1ENR_GPIOCEN;
+    // Initialize board (clocks, GPIO, USB pins, SysTick)
+    board_init();
 
-	LED_INIT();
-	BUTT_INIT();
+    // board_init() passed: two quick blinks
+    for (int i = 0; i < 4; i++) {
+        if (i & 1) ledOn(); else ledOff();
+        delay_ms(100);
+    }
 
-	display1_init(0);
+    // Initialize flash chip
+    flash25q64_init();
 
-	while (1) {
-		delay_ms(32);
-		if (!BUTT_READ()) ledOn(); else ledOff();
-	}
+    // flash25q64_init() passed: two more quick blinks
+    for (int i = 0; i < 4; i++) {
+        if (i & 1) ledOn(); else ledOff();
+        delay_ms(100);
+    }
+
+    // Initialize TinyUSB device stack on roothub port 0
+    tusb_rhport_init_t dev_init = {.role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_FULL};
+    tusb_init(BOARD_TUD_RHPORT, &dev_init);
+
+    // Post-TinyUSB init (if needed)
+    board_init_after_tusb();
+
+    // All init passed: LED off, then enter normal loop
+    ledOff();
+
+    while (1) {
+        // TinyUSB device task
+        tud_task();
+
+        // LED blink: fast when not mounted, slow when mounted
+        static uint32_t last_blink = 0;
+        static bool led_state = false;
+        uint32_t now = tusb_time_millis_api();
+
+        if (now - last_blink >= (tud_mounted() ? 1000 : 250)) {
+            last_blink = now;
+            led_state = !led_state;
+            if (led_state) {
+                ledOn();
+            } else {
+                ledOff();
+            }
+        }
+    }
 }
