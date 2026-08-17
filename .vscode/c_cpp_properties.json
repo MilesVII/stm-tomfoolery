@@ -4,7 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "stm/**"
+                "stm/**",
+                "tinyusb/src/**"
             ],
             "defines": [
                 "_DEBUG",

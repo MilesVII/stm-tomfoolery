@@ -10,7 +10,7 @@
 DECLARE_SPI(FLASH_SCK , A, 5, 5);
 DECLARE_SPI(FLASH_MISO, A, 6, 5);
 DECLARE_SPI(FLASH_MOSI, A, 7, 5);
-DECLARE_GPIO_MOUT(FLASH_NSS, A, 4);
+DECLARE_GPIO_MOUT(FLASH_CS, A, 4);
 
 // Commands
 #define CMD_WRITE_ENABLE       0x06
@@ -27,27 +27,38 @@ DECLARE_GPIO_MOUT(FLASH_NSS, A, 4);
 #define CMD_JEDEC_ID           0x9F
 #define CMD_RELEASE_PD         0xAB
 
-static void cs_low(void)  { FLASH_NSS_LOW(); }
-static void cs_high(void) { FLASH_NSS_HIGH(); }
-
-static uint8_t spi_xfer(uint8_t tx) {
+static uint8_t spi_byte(const uint8_t byte) {
 	while (!SPI_TXE_READY(SPIF));
-	SPIF->DR = tx;
+	SPIF->DR = byte;
 	while (!SPI_RXNE_READY(SPIF));
 	return (uint8_t)SPIF->DR;
 }
 
 static void spi_write(const uint8_t* data, uint32_t len) {
-	for (uint32_t i = 0; i < len; i++) {
-		(void)spi_xfer(data[i]);
+	while (!SPI_TXE_READY(SPIF));
+	SPIF->DR = data[0];
+	for (uint32_t i = 1; i < len; ++i) {
+		while (!SPI_TXE_READY(SPIF));
+		SPIF->DR = data[i];
+		while (!SPI_RXNE_READY(SPIF));
+		(void)SPIF->DR;
 	}
+	while (!SPI_RXNE_READY(SPIF));
+	(void)SPIF->DR;
 	while (SPI_BSY(SPIF));
 }
 
 static void spi_read(uint8_t* dst, uint32_t len) {
-	for (uint32_t i = 0; i < len; i++) {
-		dst[i] = spi_xfer(0xFF);
+	while (!SPI_TXE_READY(SPIF));
+	SPIF->DR = 0xFF;
+	for (uint32_t i = 0; i < len - 1; ++i) {
+		while (!SPI_TXE_READY(SPIF));
+		SPIF->DR = 0xFF;
+		while (!SPI_RXNE_READY(SPIF));
+		dst[i] = (uint8_t)SPIF->DR;
 	}
+	while (!SPI_RXNE_READY(SPIF));
+	dst[len - 1] = (uint8_t)SPIF->DR;
 	while (SPI_BSY(SPIF));
 }
 
@@ -62,40 +73,38 @@ void flash25q64_init(void) {
 	SPIF->CR1 = 0;
 	SPIF->CR2 = 0;
 
-	// PCLK2 = 16 MHz (no PLL). /2 => 8 MHz SCK. CPOL=0, CPHA=0.
 	SPIF->CR1 =
 		SPI_CR1_MSTR |
 		SPI_CR1_SSI  |
-		SPI_CR1_SSM  |
-		SPI_CR1_SPE;
-	SPIF->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
+		SPI_CR1_SSM;
+	SPIF->CR1 |= SPI_CR1_SPE;
 
 	// Release from power-down, just in case.
-	cs_low();
-	(void)spi_xfer(CMD_RELEASE_PD);
-	(void)spi_xfer(0xFF);
-	(void)spi_xfer(0xFF);
-	(void)spi_xfer(0xFF);
-	cs_high();
+	FLASH_CS_LOW();
+	spi_byte(CMD_RELEASE_PD);
+	spi_byte(0xFF);
+	spi_byte(0xFF);
+	spi_byte(0xFF);
+	FLASH_CS_HIGH();
 }
 
 static void write_enable(void) {
-	cs_low();
-	(void)spi_xfer(CMD_WRITE_ENABLE);
-	cs_high();
+	FLASH_CS_LOW();
+	spi_byte(CMD_WRITE_ENABLE);
+	FLASH_CS_HIGH();
 }
 
 static void write_disable(void) {
-	cs_low();
-	(void)spi_xfer(CMD_WRITE_DISABLE);
-	cs_high();
+	FLASH_CS_LOW();
+	spi_byte(CMD_WRITE_DISABLE);
+	FLASH_CS_HIGH();
 }
 
 uint8_t flash25q64_read_status(void) {
-	cs_low();
-	(void)spi_xfer(CMD_READ_STATUS_REG1);
-	uint8_t s = spi_xfer(0xFF);
-	cs_high();
+	FLASH_CS_LOW();
+	spi_byte(CMD_READ_STATUS_REG1);
+	uint8_t s = spi_byte(0xFF);
+	FLASH_CS_HIGH();
 	return s;
 }
 
@@ -106,42 +115,42 @@ void flash25q64_wait_busy(void) {
 }
 
 uint32_t flash25q64_read_id(void) {
-	cs_low();
-	(void)spi_xfer(CMD_JEDEC_ID);
-	uint8_t mfg = spi_xfer(0xFF);
-	uint8_t mem = spi_xfer(0xFF);
-	uint8_t cap = spi_xfer(0xFF);
-	cs_high();
+	FLASH_CS_LOW();
+	spi_byte(CMD_JEDEC_ID);
+	uint8_t mfg = spi_byte(0xFF);
+	uint8_t mem = spi_byte(0xFF);
+	uint8_t cap = spi_byte(0xFF);
+	FLASH_CS_HIGH();
 	return ((uint32_t)mfg << 16) | ((uint32_t)mem << 8) | cap;
 }
 
 void flash25q64_read(uint32_t addr, uint8_t* dst, uint32_t len) {
-	cs_low();
-	(void)spi_xfer(CMD_READ_DATA);
-	(void)spi_xfer((addr >> 16) & 0xFF);
-	(void)spi_xfer((addr >> 8) & 0xFF);
-	(void)spi_xfer(addr & 0xFF);
+	FLASH_CS_LOW();
+	spi_byte(CMD_READ_DATA);
+	spi_byte((addr >> 16) & 0xFF);
+	spi_byte((addr >> 8) & 0xFF);
+	spi_byte(addr & 0xFF);
 	spi_read(dst, len);
-	cs_high();
+	FLASH_CS_HIGH();
 }
 
 void flash25q64_sector_erase(uint32_t addr) {
 	write_enable();
-	cs_low();
-	(void)spi_xfer(CMD_SECTOR_ERASE);
-	(void)spi_xfer((addr >> 16) & 0xFF);
-	(void)spi_xfer((addr >> 8) & 0xFF);
-	(void)spi_xfer(addr & 0xFF);
-	cs_high();
+	FLASH_CS_LOW();
+	spi_byte(CMD_SECTOR_ERASE);
+	spi_byte((addr >> 16) & 0xFF);
+	spi_byte((addr >> 8) & 0xFF);
+	spi_byte(addr & 0xFF);
+	FLASH_CS_HIGH();
 	flash25q64_wait_busy();
 	write_disable();
 }
 
 void flash25q64_chip_erase(void) {
 	write_enable();
-	cs_low();
-	(void)spi_xfer(CMD_CHIP_ERASE);
-	cs_high();
+	FLASH_CS_LOW();
+	spi_byte(CMD_CHIP_ERASE);
+	FLASH_CS_HIGH();
 	flash25q64_wait_busy();
 	write_disable();
 }
@@ -152,13 +161,13 @@ void flash25q64_program(uint32_t addr, const uint8_t* src, uint32_t len) {
 		uint32_t chunk = len < page_remain ? len : page_remain;
 
 		write_enable();
-		cs_low();
-		(void)spi_xfer(CMD_PAGE_PROGRAM);
-		(void)spi_xfer((addr >> 16) & 0xFF);
-		(void)spi_xfer((addr >> 8) & 0xFF);
-		(void)spi_xfer(addr & 0xFF);
+		FLASH_CS_LOW();
+		spi_byte(CMD_PAGE_PROGRAM);
+		spi_byte((addr >> 16) & 0xFF);
+		spi_byte((addr >> 8) & 0xFF);
+		spi_byte(addr & 0xFF);
 		spi_write(src, chunk);
-		cs_high();
+		FLASH_CS_HIGH();
 		flash25q64_wait_busy();
 		write_disable();
 
