@@ -31,34 +31,28 @@ static uint8_t spi_byte(const uint8_t byte) {
 	while (!SPI_TXE_READY(SPIF));
 	SPIF->DR = byte;
 	while (!SPI_RXNE_READY(SPIF));
-	return (uint8_t)SPIF->DR;
+	uint8_t hehe = (uint8_t)SPIF->DR;
+	while (SPI_BSY(SPIF));
+	return hehe;
 }
 
 static void spi_write(const uint8_t* data, uint32_t len) {
-	while (!SPI_TXE_READY(SPIF));
-	SPIF->DR = data[0];
-	for (uint32_t i = 1; i < len; ++i) {
+	for (uint32_t i = 0; i < len; ++i) {
 		while (!SPI_TXE_READY(SPIF));
 		SPIF->DR = data[i];
 		while (!SPI_RXNE_READY(SPIF));
 		(void)SPIF->DR;
 	}
-	while (!SPI_RXNE_READY(SPIF));
-	(void)SPIF->DR;
 	while (SPI_BSY(SPIF));
 }
 
 static void spi_read(uint8_t* dst, uint32_t len) {
-	while (!SPI_TXE_READY(SPIF));
-	SPIF->DR = 0xFF;
-	for (uint32_t i = 0; i < len - 1; ++i) {
+	for (uint32_t i = 0; i < len; ++i) {
 		while (!SPI_TXE_READY(SPIF));
 		SPIF->DR = 0xFF;
 		while (!SPI_RXNE_READY(SPIF));
 		dst[i] = (uint8_t)SPIF->DR;
 	}
-	while (!SPI_RXNE_READY(SPIF));
-	dst[len - 1] = (uint8_t)SPIF->DR;
 	while (SPI_BSY(SPIF));
 }
 
@@ -68,7 +62,7 @@ void flash25q64_init(void) {
 	FLASH_SCK_INIT();
 	FLASH_MISO_INIT();
 	FLASH_MOSI_INIT();
-	FLASH_NSS_INIT();
+	FLASH_CS_INIT(); FLASH_CS_HIGH();
 
 	SPIF->CR1 = 0;
 	SPIF->CR2 = 0;
@@ -76,7 +70,8 @@ void flash25q64_init(void) {
 	SPIF->CR1 =
 		SPI_CR1_MSTR |
 		SPI_CR1_SSI  |
-		SPI_CR1_SSM;
+		SPI_CR1_SSM  |
+		(3U << 3);
 	SPIF->CR1 |= SPI_CR1_SPE;
 
 	// Release from power-down, just in case.
@@ -92,6 +87,7 @@ static void write_enable(void) {
 	FLASH_CS_LOW();
 	spi_byte(CMD_WRITE_ENABLE);
 	FLASH_CS_HIGH();
+	while (flash25q64_read_status() & 0x02 == 0);
 }
 
 static void write_disable(void) {

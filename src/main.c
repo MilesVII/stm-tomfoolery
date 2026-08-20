@@ -36,6 +36,14 @@ static void delay_ms_blocking(uint32_t ms) {
 		for (volatile uint32_t d = 0; d < 4000; d++) __NOP();
 	}
 }
+
+static void blink(uint32_t count, uint32_t duration) {
+	for (int i = 0; i < count * 2; i++) {
+		if (i & 1) ledOn(); else ledOff();
+		delay_ms_blocking(duration);
+	}
+}
+
 uint8_t sig[3] = { 0x07, 0xF7, 0x77 };
 
 int main(void) {
@@ -43,31 +51,36 @@ int main(void) {
 	// If the LED never lights up, the chip is not executing from flash.
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
 	GPIOC->MODER |= (1U << (13 * 2));
-	ledOn();
-	delay_ms_blocking(200);
-	ledOff();
-	delay_ms_blocking(200);
+	blink(1, 300);
 
 	// Initialize board (clocks, GPIO, USB pins, SysTick)
 	board_init();
+	delay_ms_blocking(100);
 
 	// board_init() passed: two quick blinks
-	for (int i = 0; i < 4; i++) {
-		if (i & 1) ledOn(); else ledOff();
-		delay_ms(100);
-	}
 
 	// Initialize flash chip
 	flash25q64_init();
 
+	delay_ms_blocking(100);
+
+	blink(1, 300);
+
 	// Write a test signature to flash sector 0 (for debugging)
 	flash25q64_erase_and_write(0, sig, sizeof(sig));
+	delay_ms_blocking(100);
+
+	uint8_t c[3];
+	flash25q64_read(0, c, 3);
+	for (int i = 0; i < 3; ++i) {
+		if (c[i] != sig[i]) {
+			blink(1000, 100);
+			break;
+		}
+	}
 
 	// flash25q64_init() passed: two more quick blinks
-	for (int i = 0; i < 4; i++) {
-		if (i & 1) ledOn(); else ledOff();
-		delay_ms(100);
-	}
+	blink(3, 500);
 
 	// Initialize MSC disk write-back cache
 	msc_disk_init();

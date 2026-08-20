@@ -29,7 +29,7 @@ static void clock_init(void) {
 		// PLL_VCO = 25/25 * 336 = 336 MHz
 		// SYSCLK = 336 / 4 = 84 MHz
 		// USB = 336 / 7 = 48 MHz
-		RCC->PLLCFGR = (PLL_Q << 24) | (PLL_P << 17) | (PLL_N << 6) | (PLL_M << 0) | RCC_PLLCFGR_PLLSRC_HSE;
+		RCC->PLLCFGR = (PLL_Q << 24) | (PLL_P << 16) | (PLL_N << 6) | (PLL_M << 0) | RCC_PLLCFGR_PLLSRC_HSE;
 	} else {
 		// HSE failed to start: fall back to HSI (16 MHz internal RC)
 		// Make sure HSE is off so it does not interfere
@@ -40,7 +40,7 @@ static void clock_init(void) {
 		while (!(RCC->CR & RCC_CR_HSIRDY) && --timeout) {}
 
 		// PLL from HSI: 16/16 * 336 / 4 = 84 MHz, USB = 48 MHz
-		RCC->PLLCFGR = (7U << 24) | (PLL_P << 17) | (336U << 6) | (16U << 0) | RCC_PLLCFGR_PLLSRC_HSI;
+		RCC->PLLCFGR = (7U << 24) | (PLL_P << 16) | (336U << 6) | (16U << 0) | RCC_PLLCFGR_PLLSRC_HSI;
 	}
 
 	RCC->CR |= RCC_CR_PLLON;
