@@ -71,7 +71,7 @@ void flash25q64_init(void) {
 		SPI_CR1_MSTR |
 		SPI_CR1_SSI  |
 		SPI_CR1_SSM  |
-		(3U << 3);
+		(0U << 3);
 	SPIF->CR1 |= SPI_CR1_SPE;
 
 	// Release from power-down, just in case.
