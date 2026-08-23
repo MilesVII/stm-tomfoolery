@@ -130,6 +130,11 @@ static void usb_pin_init(void) {
 
 	// Enable USB OTG FS clock
 	RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
+
+	// Force host mode and stop relying on VBUS sensing hardware
+	USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_NOVBUSSENS;
+	USB_OTG_FS->GCCFG &= ~(USB_OTG_GCCFG_VBUSBSEN | USB_OTG_GCCFG_VBUSASEN);
+	USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_PWRDWN;
 }
 
 //--------------------------------------------------------------------+

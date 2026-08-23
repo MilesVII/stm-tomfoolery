@@ -2,10 +2,7 @@
 #include "hal_at_home.h"
 #include "tusb.h"
 #include "usb/board.h"
-
-// Forward declarations for MSC disk cache
-void msc_disk_init(void);
-void msc_disk_pending_flush(void);
+#include "usb/xgip_host.h"
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
@@ -44,7 +41,28 @@ static void blink(uint32_t count, uint32_t duration) {
 	ledOff();
 }
 
-uint8_t sig[3] = { 0x07, 0xF7, 0x77 };
+//--------------------------------------------------------------------+
+// USB host event callbacks -> LED diagnostics
+//
+// LED states (PC13, active low):
+//   slow blink (400 ms)      : no device connected
+//   fast blink (80 ms)       : device attached, enumerating
+//   medium blink (250 ms)    : device mounted, GIP not powered yet
+//   solid ON                 : GIP pad ready, no button pressed
+//   OFF                      : GIP pad ready AND button pressed
+//--------------------------------------------------------------------+
+
+static volatile bool usb_dev_mounted = false;
+
+void tuh_mount_cb(uint8_t daddr) {
+	(void) daddr;
+	usb_dev_mounted = true;
+}
+
+void tuh_umount_cb(uint8_t daddr) {
+	(void) daddr;
+	usb_dev_mounted = false;
+}
 
 int main(void) {
 	RCC->AHB1ENR |=
@@ -55,20 +73,15 @@ int main(void) {
 	LED_INIT();
 	ledOff();
 
-	// blink(1, 300);
-
 	// Initialize board (clocks, GPIO, USB pins, SysTick)
 	board_init();
-	SysTick_Config(SystemCoreClock / 1000);
-	// delay_ms_blocking(100);
 
 	// board_init() passed: two quick blinks
+	blink(2, 300);
 
-	// msc_disk_init();
-
-	// Initialize TinyUSB device stack on roothub port 0
-	tusb_rhport_init_t dev_init = {.role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_FULL};
-	tusb_init(BOARD_TUD_RHPORT, &dev_init);
+	// Initialize TinyUSB host stack on roothub port 0 (OTG_FS)
+	tusb_rhport_init_t host_init = {.role = TUSB_ROLE_HOST, .speed = TUSB_SPEED_FULL};
+	tusb_init(BOARD_TUH_RHPORT, &host_init);
 
 	// Post-TinyUSB init (if needed)
 	board_init_after_tusb();
@@ -77,26 +90,34 @@ int main(void) {
 	ledOff();
 
 	while (1) {
-		// TinyUSB device task
-		tud_task();
+		// TinyUSB host task
+		tuh_task();
 
-		// // Flush MSC write-back cache when safe-removal was requested.
-		// // We defer the actual flash erase+write out of the USB callback
-		// // so the host doesn't time out during the ~50 ms flash operation.
-		msc_disk_pending_flush();
+		// GIP power-on / keep-alive packets
+		xgip_task();
 
-		// // LED blink: fast when not mounted, slow when mounted
+		// LED diagnostics:
+		//  - pad ready: solid ON, OFF while a button is pressed
+		//  - pad mounted but not powered: medium blink
+		//  - device attached/enumerating: fast blink
+		//  - nothing connected: slow blink
 		static uint32_t last_blink = 0;
 		static bool led_state = false;
 		uint32_t now = tusb_time_millis_api();
 
-		if (now - last_blink >= (tud_mounted() ? 1000 : 250)) {
-			last_blink = now;
-			led_state = !led_state;
-			if (led_state) {
-				ledOn();
-			} else {
+		if (xgip_mounted()) {
+			if (xgip_any_button_pressed()) {
 				ledOff();
+			} else {
+				ledOn();
+			}
+		} else {
+			uint32_t period = usb_dev_mounted ? 250 :
+					tuh_connected(1) ? 80 : 400;
+			if (now - last_blink >= period) {
+				last_blink = now;
+				led_state = !led_state;
+				if (led_state) ledOn(); else ledOff();
 			}
 		}
 	}
