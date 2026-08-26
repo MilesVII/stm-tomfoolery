@@ -1,5 +1,5 @@
 arm-none-eabi-gcc ^
-	--specs=nosys.specs -mcpu=cortex-m4 -mthumb -O2 ^
+	--specs=nosys.specs -mcpu=cortex-m4 -mthumb -O0 -g3 ^
 	-I stm/cmsis/include-core ^
 	-I stm/cmsis/include-device ^
 	-T stm/STM32F411CEUX_FLASH.ld ^
