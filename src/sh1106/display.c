@@ -187,6 +187,34 @@ void display0_update_48_32(uint8_t* frame, uint32_t status0, uint32_t status1) {
 		}
 	}
 }
+void display0_updateNumbers(uint32_t* status, uint32_t count) {
+	uint16_t page, row, x, y;
+
+	/*
+	[row2]
+	[row1]
+	[row0]
+	x [p0] [p1] [p2] etc
+	*/
+	for (page = 0; page < PAGE_CAP; ++page) {
+		/* set page address */
+		reg(0xB0 + page);
+		/* set low column address */
+		reg(0x02);
+		/* set high column address */
+		reg(0x10);
+
+		/* write data */
+		for(row = 0; row < DISPLAY_H; ++row) {
+			uint8_t ix = row / 7;
+			if (ix >= count) {
+				data(0x00);
+			} else {
+				data(drawChar(page, row % 7, status[ix]));
+			}
+		}
+	}
+}
 
 void display0_updateTranslated(uint8_t* src) {
 	/* SRC:
