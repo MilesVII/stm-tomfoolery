@@ -72,6 +72,8 @@ void tuh_umount_cb(uint8_t daddr) {
 	usb_dev_mounted = false;
 }
 
+#define OTG_FS_HPRT (*(volatile uint32_t *)(USB_OTG_FS_PERIPH_BASE + 0x440UL))
+
 int main(void) {
 	RCC->AHB1ENR |=
 		RCC_AHB1ENR_GPIOAEN |
@@ -84,6 +86,7 @@ int main(void) {
 
 	// Initialize board (clocks, GPIO, USB pins, SysTick)
 	board_init(); // <- clocks get init into 84mhz there
+	USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_FHMOD;
 	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
 	display0_init();
 	FILL(gfx, 0x00);
@@ -120,24 +123,29 @@ int main(void) {
 		static bool led_state = false;
 		uint32_t now = tusb_time_millis_api();
 
-		// if (xgip_mounted()) {
-		// 	if (xgip_any_button_pressed()) {
-		// 		ledOff();
-		// 	} else {
-		// 		ledOn();
-		// 	}
-		// } else {
-		// 	uint32_t period = usb_dev_mounted ? 250 :
-		// 			tuh_connected(1) ? 80 : 400;
-		// 	if (now - last_blink >= period) {
-		// 		last_blink = now;
-		// 		led_state = !led_state;
-		// 		if (led_state) ledOn(); else ledOff();
-		// 	}
-		// }
+		if (xgip_mounted()) {
+			if (xgip_any_button_pressed()) {
+				ledOff();
+			} else {
+				ledOn();
+			}
+		} else {
+			uint32_t period = usb_dev_mounted ? 250 :
+					tuh_connected(1) ? 80 : 400;
+			if (now - last_blink >= period) {
+				last_blink = now;
+				led_state = !led_state;
+				if (led_state) ledOn(); else ledOff();
+			}
+		}
 
-		display0_updateNumbers(status, 7);
-		// display0_update_48_32(gfx, USB_OTG_FS->GCCFG, USB_OTG_FS->GINTSTS);
+		status[0] = USB_OTG_FS->GCCFG;
+		status[1] = USB_OTG_FS->GINTSTS;
+		status[2] = USB_OTG_FS->GOTGCTL;
+		status[3] = OTG_FS_HPRT;
+		status[4] = USB_OTG_FS->GINTSTS;
+
+		display0_updateNumbers(status, 6);
 		delay_ms(10);
 	}
 }
