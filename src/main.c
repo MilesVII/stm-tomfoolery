@@ -3,14 +3,22 @@
 #include "tusb.h"
 #include "usb/board.h"
 #include "usb/xgip_host.h"
+#include "sh1106/display.h"
+#include <stdlib.h>
+#include <math.h>
+
+#define FILL(v, d) for (int i = 0; i < (sizeof(v) / sizeof(v[0])); ++i) { v[i] = d; }
+#define AT(x, y, w) ((x) + (y) * (w))
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
 
-static void ledOff() {
+uint8_t gfx[1024];
+
+void ledOff() {
 	LED_HIGH();
 }
-static void ledOn() {
+void ledOn() {
 	LED_LOW();
 }
 
@@ -71,10 +79,15 @@ int main(void) {
 		RCC_AHB1ENR_GPIOCEN;
 
 	LED_INIT();
+	BUTT_INIT();
 	ledOff();
 
 	// Initialize board (clocks, GPIO, USB pins, SysTick)
-	board_init();
+	board_init(); // <- clocks get init into 84mhz there
+	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
+	display0_init();
+	FILL(gfx, 0x00);
+	display0_updateTranslated(gfx);
 
 	// board_init() passed: two quick blinks
 	blink(2, 300);
@@ -88,6 +101,8 @@ int main(void) {
 
 	// All init passed: LED off, then enter normal loop
 	ledOff();
+
+	uint32_t status[7] = { 771, 7001, 7420, 777, 7, 17, 27 };
 
 	while (1) {
 		// TinyUSB host task
@@ -105,20 +120,24 @@ int main(void) {
 		static bool led_state = false;
 		uint32_t now = tusb_time_millis_api();
 
-		if (xgip_mounted()) {
-			if (xgip_any_button_pressed()) {
-				ledOff();
-			} else {
-				ledOn();
-			}
-		} else {
-			uint32_t period = usb_dev_mounted ? 250 :
-					tuh_connected(1) ? 80 : 400;
-			if (now - last_blink >= period) {
-				last_blink = now;
-				led_state = !led_state;
-				if (led_state) ledOn(); else ledOff();
-			}
-		}
+		// if (xgip_mounted()) {
+		// 	if (xgip_any_button_pressed()) {
+		// 		ledOff();
+		// 	} else {
+		// 		ledOn();
+		// 	}
+		// } else {
+		// 	uint32_t period = usb_dev_mounted ? 250 :
+		// 			tuh_connected(1) ? 80 : 400;
+		// 	if (now - last_blink >= period) {
+		// 		last_blink = now;
+		// 		led_state = !led_state;
+		// 		if (led_state) ledOn(); else ledOff();
+		// 	}
+		// }
+
+		display0_updateNumbers(status, 7);
+		// display0_update_48_32(gfx, USB_OTG_FS->GCCFG, USB_OTG_FS->GINTSTS);
+		delay_ms(10);
 	}
 }

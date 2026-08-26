@@ -13,6 +13,7 @@ arm-none-eabi-gcc ^
 	stm/startup_stm32f411xe-gcc.s ^
 	stm/system_stm32f4xx.c ^
 	src/hal_at_home.c ^
+	src/sh1106/display.c ^
 	src/usb/board.c ^
 	src/usb/xgip_host.c ^
 	tinyusb/src/tusb.c ^
