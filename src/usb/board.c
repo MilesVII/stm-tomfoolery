@@ -109,25 +109,6 @@ static void usb_pin_init(void) {
 	GPIOA->OSPEEDR |= ((3U << 11 * 2) | (3U << 12 * 2));
 	GPIOA->PUPDR &= ~((3U << 11 * 2) | (3U << 12 * 2));
 
-	// PA9 (VBUS) - input, no pull (sensed by hardware)
-	GPIOA->MODER &= ~(3U << (9 * 2));
-	GPIOA->PUPDR &= ~(3U << (9 * 2));
-
-	// PA10 (ID) - alternate function 10 (OTG_FS), open-drain, pull-up
-	GPIOA->MODER &= ~(3U << (10 * 2));
-	GPIOA->MODER |= (2U << (10 * 2));
-	GPIOA->AFR[1] &= ~(0xF << (10 - 8) * 4);
-	GPIOA->AFR[1] |= (10U << (10 - 8) * 4);
-	GPIOA->OTYPER |= (1U << 10);
-	GPIOA->PUPDR &= ~(3U << (10 * 2));
-	GPIOA->PUPDR |= (1U << (10 * 2));
-
-	// PA8 (SOF) - alternate function 10 (OTG_FS)
-	GPIOA->MODER &= ~(3U << (8 * 2));
-	GPIOA->MODER |= (2U << (8 * 2));
-	GPIOA->AFR[1] &= ~(0xF << (8 - 8) * 4);
-	GPIOA->AFR[1] |= (10U << (8 - 8) * 4);
-
 	// Enable USB OTG FS clock
 	RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
 
