@@ -105,7 +105,9 @@ int main(void) {
 	// All init passed: LED off, then enter normal loop
 	ledOff();
 
-	uint32_t status[7] = { 771, 7001, 7420, 777, 7, 17, 27 };
+	uint32_t status[32];
+	uint32_t statusCount = 0;
+	uint32_t pocket = 0;
 
 	while (1) {
 		// TinyUSB host task
@@ -139,13 +141,13 @@ int main(void) {
 			}
 		}
 
-		status[0] = USB_OTG_FS->GCCFG;
-		status[1] = USB_OTG_FS->GINTSTS;
-		status[2] = USB_OTG_FS->GOTGCTL;
-		status[3] = OTG_FS_HPRT;
-		status[4] = USB_OTG_FS->GINTSTS;
+		uint32_t x = xgip_buttons();
+		if (x != pocket) {
+			status[statusCount++] = x;
+			pocket = x;
+		}
 
-		display0_updateNumbers(status, 6);
+		display0_updateNumbers(status, statusCount);
 		delay_ms(10);
 	}
 }

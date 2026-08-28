@@ -64,13 +64,15 @@ bool xgip_any_button_pressed(void) {
 
 static void xgip_queue_in(xgip_interface_t *p_xgip) {
 	// Completion is routed back to xgip_xfer_cb() by usbh (class driver)
-	usbh_edpt_xfer(p_xgip->daddr, p_xgip->ep_in,
+	bool r0 = usbh_edpt_xfer(p_xgip->daddr, p_xgip->ep_in,
 			p_xgip->epin_buf, sizeof(p_xgip->epin_buf));
+	(void) r0;
 }
 
 static void xgip_send_out(xgip_interface_t *p_xgip, const uint8_t *pkt, uint16_t len) {
 	memcpy(p_xgip->epout_buf, pkt, len);
-	usbh_edpt_xfer(p_xgip->daddr, p_xgip->ep_out, p_xgip->epout_buf, len);
+	bool r0 = usbh_edpt_xfer(p_xgip->daddr, p_xgip->ep_out, p_xgip->epout_buf, len);
+	(void) r0;
 }
 
 static void xgip_send_power_on(xgip_interface_t *p_xgip) {
@@ -141,11 +143,11 @@ static uint16_t xgip_open(uint8_t rhport, uint8_t dev_addr,
 	p_desc += sizeof(tusb_desc_interface_t);
 
 	// Parse endpoint descriptors
-	while (p_desc < desc_end) {
+	for (uint8_t i = 0; i < itf_desc->bNumEndpoints; i++) {
 		tusb_desc_endpoint_t const *desc_ep = (tusb_desc_endpoint_t const *) p_desc;
 		TU_VERIFY(TUSB_DESC_ENDPOINT == desc_ep->bDescriptorType, 0);
 
-		tuh_edpt_open(dev_addr, desc_ep);
+		bool r0 = tuh_edpt_open(dev_addr, desc_ep);
 
 		if (desc_ep->bEndpointAddress & TUSB_DIR_IN_MASK) {
 			p_xgip->ep_in = desc_ep->bEndpointAddress;
@@ -184,8 +186,7 @@ static bool xgip_set_config(uint8_t dev_addr, uint8_t itf_num) {
 	return true;
 }
 
-static bool xgip_xfer_cb(uint8_t dev_addr, uint8_t ep_addr,
-		xfer_result_t result, uint32_t xferred_bytes) {
+static bool xgip_xfer_cb(uint8_t dev_addr, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_bytes) {
 	(void) dev_addr;
 	(void) result;
 
