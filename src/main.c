@@ -13,6 +13,19 @@
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
 
+#define GPAD_CROSS_U 1
+#define GPAD_CROSS_D 2
+#define GPAD_CROSS_L 4
+#define GPAD_CROSS_R 8
+#define GPAD_LEVER_L 16
+#define GPAD_LEVER_R 32
+#define GPAD_CNTRL_M 1024 // menu
+#define GPAD_CNTRL_W 2048 // win
+#define GPAD_BUTTS_A 4096
+#define GPAD_BUTTS_B 8196
+#define GPAD_BUTTS_X 16384
+#define GPAD_BUTTS_Y 32768
+
 uint8_t gfx[1024];
 
 void ledOff() {
@@ -125,26 +138,32 @@ int main(void) {
 		static bool led_state = false;
 		uint32_t now = tusb_time_millis_api();
 
-		if (xgip_mounted()) {
-			if (xgip_any_button_pressed()) {
-				ledOff();
-			} else {
-				ledOn();
-			}
-		} else {
-			uint32_t period = usb_dev_mounted ? 250 :
-					tuh_connected(1) ? 80 : 400;
-			if (now - last_blink >= period) {
-				last_blink = now;
-				led_state = !led_state;
-				if (led_state) ledOn(); else ledOff();
-			}
-		}
+		// if (xgip_mounted()) {
+		// 	if (xgip_any_button_pressed()) {
+		// 		ledOff();
+		// 	} else {
+		// 		ledOn();
+		// 	}
+		// } else {
+		// 	uint32_t period = usb_dev_mounted ? 250 :
+		// 			tuh_connected(1) ? 80 : 400;
+		// 	if (now - last_blink >= period) {
+		// 		last_blink = now;
+		// 		led_state = !led_state;
+		// 		if (led_state) ledOn(); else ledOff();
+		// 	}
+		// }
 
 		uint32_t x = xgip_buttons();
 		if (x != pocket) {
 			status[statusCount++] = x;
 			pocket = x;
+
+
+
+
+
+
 		}
 
 		display0_updateNumbers(status, statusCount);
