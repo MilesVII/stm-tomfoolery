@@ -23,5 +23,6 @@ arm-none-eabi-gcc ^
 	tinyusb/src/portable/synopsys/dwc2/hcd_dwc2.c ^
 	tinyusb/src/portable/synopsys/dwc2/dwc2_common.c ^
 	src/main.c ^
+	src/tetris.c ^
 	-o ./bin/firmware.elf
 arm-none-eabi-objcopy -O binary ./bin/firmware.elf ./bin/firmware.bin

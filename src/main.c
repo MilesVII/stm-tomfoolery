@@ -4,6 +4,7 @@
 #include "usb/board.h"
 #include "usb/xgip_host.h"
 #include "sh1106/display.h"
+#include "tetris.h"
 #include <stdlib.h>
 #include <math.h>
 
@@ -19,6 +20,7 @@ DECLARE_GPIO_MIN(BUTT, A, 0);
 #define GPAD_CROSS_R 8
 #define GPAD_LEVER_L 16
 #define GPAD_LEVER_R 32
+#define GPAD_LEVER_A (GPAD_LEVER_L | GPAD_LEVER_R)
 #define GPAD_CNTRL_M 1024 // menu
 #define GPAD_CNTRL_W 2048 // win
 #define GPAD_BUTTS_A 4096
@@ -34,6 +36,15 @@ void ledOff() {
 void ledOn() {
 	LED_LOW();
 }
+#define TARGET_FPS 60.0
+const float targetFrameTimeMS = 1000.0 / TARGET_FPS;
+#define DT() (float)DWT->CYCCNT * 1000.0 / SystemCoreClock
+#define DTC() DWT->CYCCNT
+#define DT_RESET() DWT->CYCCNT = 0
+
+// screen size
+#define SW 240
+#define SH 320
 
 // Hard fault indicator: LED on solid
 void HardFault_Handler(void) {
@@ -97,16 +108,15 @@ int main(void) {
 	BUTT_INIT();
 	ledOff();
 
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	DWT->CYCCNT = 0;
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+	srand(0);
+
 	// Initialize board (clocks, GPIO, USB pins, SysTick)
 	board_init(); // <- clocks get init into 84mhz there
 	USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_FHMOD;
 	SysTick_Config(SystemCoreClock / 1000); // 1ms tick
-	display0_init();
-	FILL(gfx, 0x00);
-	display0_updateTranslated(gfx);
-
-	// board_init() passed: two quick blinks
-	blink(2, 300);
 
 	// Initialize TinyUSB host stack on roothub port 0 (OTG_FS)
 	tusb_rhport_init_t host_init = {.role = TUSB_ROLE_HOST, .speed = TUSB_SPEED_FULL};
@@ -115,58 +125,46 @@ int main(void) {
 	// Post-TinyUSB init (if needed)
 	board_init_after_tusb();
 
-	// All init passed: LED off, then enter normal loop
+	display0_init();
+	display0_updateTranslated(gfx);
+	display0_clear();
+	tetris_init(gfx);
 	ledOff();
 
-	uint32_t status[32];
-	uint32_t statusCount = 0;
-	uint32_t pocket = 0;
+	uint16_t gameIO;
+	uint16_t score = TETRIS_SCORE_DIRTY;
+	float smolMS = 0.0;
+	float fullMS = 0.0;
 
 	while (1) {
-		// TinyUSB host task
+		DT_RESET();
 		tuh_task();
-
-		// GIP power-on / keep-alive packets
 		xgip_task();
 
-		// LED diagnostics:
-		//  - pad ready: solid ON, OFF while a button is pressed
-		//  - pad mounted but not powered: medium blink
-		//  - device attached/enumerating: fast blink
-		//  - nothing connected: slow blink
-		static uint32_t last_blink = 0;
-		static bool led_state = false;
-		uint32_t now = tusb_time_millis_api();
+		uint32_t padInput = xgip_buttons();
+		// xgip_mounted();
+		gameIO =
+			(gameIO << 8) |
+			(padInput & (GPAD_LEVER_R | GPAD_LEVER_L) ? TETRIS_IO_D : 0x00) |
+			(padInput & GPAD_BUTTS_Y ? TETRIS_IO_S  : 0x00) |
+			(padInput & GPAD_CROSS_L ? TETRIS_IO_L  : 0x00) |
+			(padInput & GPAD_CROSS_R ? TETRIS_IO_R  : 0x00) |
+			(padInput & GPAD_CNTRL_M ? TETRIS_IO_P  : 0x00) |
+			(padInput & GPAD_BUTTS_A ? TETRIS_IO_FD : 0x00);
 
-		// if (xgip_mounted()) {
-		// 	if (xgip_any_button_pressed()) {
-		// 		ledOff();
-		// 	} else {
-		// 		ledOn();
-		// 	}
-		// } else {
-		// 	uint32_t period = usb_dev_mounted ? 250 :
-		// 			tuh_connected(1) ? 80 : 400;
-		// 	if (now - last_blink >= period) {
-		// 		last_blink = now;
-		// 		led_state = !led_state;
-		// 		if (led_state) ledOn(); else ledOff();
-		// 	}
-		// }
-
-		uint32_t x = xgip_buttons();
-		if (x != pocket) {
-			status[statusCount++] = x;
-			pocket = x;
-
-
-
-
-
-
+		tetris_update(gfx, gameIO, fullMS, &score);
+		display0_updateTranslated(gfx);
+		if (score & TETRIS_SCORE_DIRTY) {
+			score = score & ~TETRIS_SCORE_DIRTY;
 		}
 
-		display0_updateNumbers(status, statusCount);
-		delay_ms(10);
+		smolMS = DT();
+		if (smolMS < targetFrameTimeMS) {
+			float sleepTimeMS = roundf(targetFrameTimeMS - smolMS);
+			if (sleepTimeMS > 0) delay_ms((uint32_t)sleepTimeMS);
+		} else {
+			ledOn();
+		}
+		fullMS = DT();
 	}
 }
