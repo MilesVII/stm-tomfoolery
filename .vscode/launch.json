@@ -1,0 +1,19 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "ST-Link",
+			"type": "cortex-debug",
+			"request": "launch",
+			"cwd": "${workspaceFolder}",
+			"executable": "${workspaceFolder}/bin/firmware.elf",
+			"servertype": "openocd",
+			"device": "STM32F411",
+			"configFiles": [
+				"interface/stlink.cfg",
+				"target/stm32f4x.cfg"
+			],
+			"gdbPath": "arm-none-eabi-gdb"
+		}
+	]
+}

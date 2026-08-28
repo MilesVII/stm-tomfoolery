@@ -182,6 +182,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t *
 	uint32_t flash_addr = lba * DISK_BLOCK_SIZE + offset;
 	uint32_t sector_base = flash_addr & ~(FLASH25Q64_SECTOR_SIZE - 1);
 
+	// 	flash25q64_erase_and_write(sector_base, buffer, bufsize);
 	// Find or load the sector into cache, then apply the write
 	cache_slot_t *slot = cache_find_or_alloc(sector_base);
 	memcpy(slot->data + (flash_addr - sector_base), buffer, bufsize);

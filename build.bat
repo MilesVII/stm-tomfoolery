@@ -1,5 +1,5 @@
 arm-none-eabi-gcc ^
-	--specs=nosys.specs -mcpu=cortex-m4 -mthumb -O2 ^
+	--specs=nosys.specs -mcpu=cortex-m4 -mthumb -O0 -g3 ^
 	-DCFG_TUSB_MCU=304 ^
 	-DBOARD_TUD_RHPORT=0 ^
 	-DBOARD_TUD_MAX_SPEED=512 ^
