@@ -1,5 +1,7 @@
 # STM32F411
-Pure CMSIS drivers, no HAL
+Running tetris on SH1106 display with Xbox One-compatible USB gamepad.
+
+USB is on pins A11 for D- and A12 for D+, onboard type-C port doesn't work, requires direct connection. assumed gamepad hardware id is `USB\VID_20D6&PID_200D`. tinyUSB integration and gamepad driver are v*becoded. 
 
 C13-14-15 | A0-A7 | B0-1-2 B10
 B9-B3 | A15 A12-A8 | B15-B12
@@ -9,36 +11,4 @@ B9-B3 | A15 A12-A8 | B15-B12
 `A11`, `A12`, `B2`
 avoid: `A9`, `A10`
 
-## 25Q64JVSIQ
-8MiB flash chip
-
-```
-soldered pins connections
-3V 3V A5 A7
-A4 A6 3V GND
-```
-
-```
-SPI1 AF5:
-A4 NSS
-A5 SCK
-A6 MISO
-A7 MOSI
-```
-
-## ILI9341/V
-display
-
-```
-LED(ignored) -> 3V via 100ohm
-
-SPI2 AF5:
-(hanging) SDO/MISO
-B13 SCK
-B15 SDI/MOSI
-
-GPIO:
-B14 DC
-B12 RESET
-A8 CS (soft NSS)
-```
+refer to device drivers to check the pin definitons

@@ -24,7 +24,7 @@ DECLARE_GPIO_MIN(BUTT, A, 0);
 #define GPAD_CNTRL_M 1024 // menu
 #define GPAD_CNTRL_W 2048 // win
 #define GPAD_BUTTS_A 4096
-#define GPAD_BUTTS_B 8196
+#define GPAD_BUTTS_B 8192
 #define GPAD_BUTTS_X 16384
 #define GPAD_BUTTS_Y 32768
 
@@ -143,14 +143,16 @@ int main(void) {
 
 		uint32_t padInput = xgip_buttons();
 		// xgip_mounted();
+		bool bothLevers = (padInput & GPAD_LEVER_L) && (padInput & GPAD_LEVER_R);
+		bool fullDrop = (padInput & GPAD_BUTTS_A) || bothLevers;
 		gameIO =
 			(gameIO << 8) |
-			(padInput & (GPAD_LEVER_R | GPAD_LEVER_L) ? TETRIS_IO_D : 0x00) |
-			(padInput & GPAD_BUTTS_Y ? TETRIS_IO_S  : 0x00) |
-			(padInput & GPAD_CROSS_L ? TETRIS_IO_L  : 0x00) |
-			(padInput & GPAD_CROSS_R ? TETRIS_IO_R  : 0x00) |
-			(padInput & GPAD_CNTRL_M ? TETRIS_IO_P  : 0x00) |
-			(padInput & GPAD_BUTTS_A ? TETRIS_IO_FD : 0x00);
+			((padInput & (GPAD_CROSS_D | GPAD_LEVER_A)) ? TETRIS_IO_D  : 0x00) |
+			((padInput & (GPAD_CROSS_U | GPAD_BUTTS_Y)) ? TETRIS_IO_S  : 0x00) |
+			((padInput & (GPAD_CROSS_L | GPAD_BUTTS_X)) ? TETRIS_IO_L  : 0x00) |
+			((padInput & (GPAD_CROSS_R | GPAD_BUTTS_B)) ? TETRIS_IO_R  : 0x00) |
+			((padInput & GPAD_CNTRL_M                 ) ? TETRIS_IO_P  : 0x00) |
+			(fullDrop                                   ? TETRIS_IO_FD : 0x00);
 
 		tetris_update(gfx, gameIO, fullMS, &score);
 		display0_updateTranslated(gfx);
