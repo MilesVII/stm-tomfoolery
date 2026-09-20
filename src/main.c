@@ -1,11 +1,13 @@
 
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
-#include "sh1106/display.h"
+#include "ili9341/display.h"
+#include "ft6336g/touch.h"
 #include "max6675/thermal.h"
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
+// DECLARE_GPIO_MIN(MOSFET, A, 1);
 
 void ledOff() {
 	LED_HIGH();
@@ -24,10 +26,13 @@ int main(void) {
 
 	LED_INIT();
 	BUTT_INIT();
+	// MOSFET_INIT(); MOSFET_HIGH();
 
-	display0_init();
+	display1_init(1);
+	display1_clear(0x00, 0, 0, 240, 320);
+	touch_init();
 	thermal_init();
-	display0_clear();
+	
 
 	uint32_t status[1] = { 0.0f };
 	while (1) {

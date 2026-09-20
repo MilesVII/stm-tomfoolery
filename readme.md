@@ -40,20 +40,6 @@ A8 CS (soft NSS)
 ```
 
 
-## SH1106
-display but cute
-
-```
-SP1 AF5:
-A5 SCK
-A7 MOSI
-
-GPIO:
-B0 D/C
-B1 RESET
-A6 CS
-```
-
 ## FT6336G
 capacitive touchscreen
 ```
@@ -66,14 +52,3 @@ __ INT (unused (fucking useless))
 B5 RST
 ```
 
-## XPT2046
-resistive touchscreen
-```
-SPI3 AF6:
-B3 SCK
-B5 MOSI
-
-GPIO:
-A15 NSS (soft)
-B6 IRQ
-```
