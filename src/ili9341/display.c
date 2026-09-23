@@ -65,6 +65,17 @@ static void SPI_WriteFill(uint8_t data, uint32_t len) {
 
 	NSS_HIGH();
 }
+static void SPI_WriteFillDual(uint16_t data, uint32_t len) {
+	NSS_LOW();
+
+	for (uint32_t i = 0; i < len; i++) {
+		SPI_Transfer(data >> 8);
+		SPI_Transfer(data & 0xFF);
+	}
+	while (SPI_BSY(SPI));
+
+	NSS_HIGH();
+}
 
 static void reg(uint8_t command) {
 	DC_LOW();
@@ -77,6 +88,10 @@ static void stream(uint8_t* byte, uint32_t count) {
 static void fill(uint8_t byte, uint32_t count) {
 	DC_HIGH();
 	SPI_WriteFill(byte, count);
+}
+static void fillDual(uint16_t word, uint32_t count) {
+	DC_HIGH();
+	SPI_WriteFillDual(word, count);
 }
 static void data(uint8_t byte) {
 	DC_HIGH();
@@ -156,6 +171,11 @@ void display1_clear(uint8_t halfColor, uint16_t x, uint16_t y, uint16_t w, uint1
 	reg(0x2C);
 	fill(halfColor, count * 2);
 }
+void display1_clearFull(uint16_t color, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+	uint32_t count = display1_setWindow(x, y, w, h);
+	reg(0x2C);
+	fillDual(color, count);
+}
 
 void display1_digit(uint16_t* gfx, char v, uint16_t atX, uint16_t atY, uint16_t backColor, uint16_t foreColor) {
 	uint16_t* cursor = gfx;
@@ -182,24 +202,30 @@ void display1_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
 		if (v <= 0) return;
 	}
 }
-void display1_string(uint16_t* gfx, char* v, uint16_t atX, uint16_t atY) {
+void display1_string(uint16_t* gfx, char* v, uint16_t back, uint16_t atX, uint16_t atY) {
 	uint16_t l = strlen(v);
 	for (uint16_t i = 0; i < l; ++i) {
-		display1_digit(gfx, v[i], atX + DIGIT_W * i, atY, 0x0000, 0xFFFF);
+		display1_digit(gfx, v[i], atX + DIGIT_W * i, atY, back, 0xFFFF);
 	}
 }
-void display1_button(uint16_t* gfx, char* caption, uint16_t atX, uint16_t atY, uint16_t w, uint16_t h) {
+void display1_stringCentered(uint16_t* gfx, char* caption, uint16_t back, uint8_t fullClear, uint16_t atX, uint16_t atY, uint16_t w, uint16_t h) {
+	uint16_t tx = atX + (w - DIGIT_W * strlen(caption)) / 2 ;
+	uint16_t ty = atY + (h - DIGIT_H) / 2;
+	if (fullClear) {
+		display1_clearFull(back, atX, ty, w, DIGIT_H);
+	}
+	display1_string(gfx, caption, back, tx, ty);
+}
+void display1_button(uint16_t* gfx, char* caption, uint16_t back, uint16_t atX, uint16_t atY, uint16_t w, uint16_t h) {
 	for (int y = 0; y < h; ++y)
 	for (int x = 0; x < w; ++x) {
 		if (y <= 2 || y >= h - 3 || x <= 2 || x >= w - 3) {
 			gfx[x + y * w] = 0x00FA;
 		} else {
-			gfx[x + y * w] = 0x0000;
+			gfx[x + y * w] = back;
 		}
 	}
 	display1_sendBytes(gfx, display1_setWindow(atX, atY, w, h));
 
-	uint16_t tx = atX + (w - DIGIT_W * strlen(caption)) / 2 ;
-	uint16_t ty = atY + (h - DIGIT_H) / 2;
-	display1_string(gfx, caption, tx, ty);
+	display1_stringCentered(gfx, caption, back, 0, atX, atY, w, h);
 }
