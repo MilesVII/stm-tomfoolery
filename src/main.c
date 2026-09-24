@@ -14,6 +14,7 @@ uint8_t io = 0;
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
+DECLARE_ADC(BATT, A, 1, ADC1);
 // DECLARE_GPIO_MIN(MOSFET, A, 1);
 
 #define STRUCT(name, fields) \
@@ -30,6 +31,7 @@ uint8_t button_touch(
 STRUCT(Timings,
 	float thermalPoll;
 	float touchPoll;
+	float batteryPoll;
 	float holdM;
 	float holdP;
 );
@@ -38,10 +40,11 @@ STRUCT(Timings,
 Timings TIMING_CONFIG = {
 	.thermalPoll = 2000,
 	.touchPoll = 100,
+	.batteryPoll = 12000,
 	.holdM = 160,
-	.holdP = 160
+	.holdP = 160,
 };
-Timings timings = { 0, 0, 0, 0 };
+Timings timings = { 0, 0, 0, 0, 0 };
 
 #define BTN_R(K, c) \
 	if (IO_TAP(io, K)) display1_button(gfx, c, 0x1F06, RECT_##K); \
@@ -79,6 +82,7 @@ int main(void) {
 
 	LED_INIT();
 	BUTT_INIT();
+	BATT_INIT();
 	// MOSFET_INIT(); MOSFET_HIGH();
 
 	display1_init(1);
@@ -93,6 +97,7 @@ int main(void) {
 	uint8_t touchCount;
 	char targetCaption[8];
 	char tempCaption[24];
+	char gaugeCaption[64];
 	uint16_t target = 100;
 	uint8_t updateTargetCaption = 1;
 	float dt = 0;
@@ -122,6 +127,13 @@ int main(void) {
 			float t = thermal_poll();
 			sprintf(tempCaption, "READING: %5.1f `C", t);
 			display1_stringCentered(gfx, tempCaption, 0x0000, 1, RECT_TRED);
+		}
+		timings.batteryPoll += dt;
+		if (timings.batteryPoll > TIMING_CONFIG.batteryPoll) {
+			timings.batteryPoll -= TIMING_CONFIG.batteryPoll;
+			float v = BATT_READ() * 4.0f;
+			sprintf(gaugeCaption, "VOLTAGE: %5.3fV / %.1f%%", v, (v - 7.0f) / 1.4f * 100);
+			display1_stringCentered(gfx, gaugeCaption, 0x0000, 1, RECT_BATT);
 		}
 
 		dt = DT();

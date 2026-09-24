@@ -81,6 +81,28 @@
 #define DECLARE_GPIO_MIN(name, port, pin) \
 	static    void name##_INIT() { PUPDR(GPIO##port, pin, 1); } \
 	static uint8_t name##_READ() { return GPIO##port->IDR & (1 << pin); }
+#define DECLARE_ADC(name, port, pin, adc) \
+	static void name##_INIT() { \
+		MODER(GPIO##port, pin, 3); \
+		PUPDR(GPIO##port, pin, 0); \
+		RCC->APB2ENR |= RCC_APB2ENR_##adc##EN; \
+		adc##_COMMON->CCR &= ~ADC_CCR_ADCPRE; \
+		adc##_COMMON->CCR |=  ADC_CCR_ADCPRE_0; \
+		adc->CR1 &= ~ADC_CR1_RES; \
+		adc->CR2 &= ~ADC_CR2_CONT; \
+		adc->CR2 &= ~ADC_CR2_ALIGN; \
+		adc->SMPR2 |= (7U << (pin * 3)); \
+		\
+		adc->SQR1 &= ~ADC_SQR1_L; \
+		adc->SQR3  = pin; \
+ 		adc->CR2 |= ADC_CR2_ADON; \
+		for (volatile int i = 0; i < 1000; i++) { } \
+	} \
+	static float name##_READ() { \
+		adc->CR2 |= ADC_CR2_SWSTART; \
+		while (!(adc->SR & ADC_SR_EOC)) { } \
+		return (adc->DR * 3.3f) / 4095.0f; \
+	}
 
 // DWT cycle counter
 #define DWTCC_DT() (float)DWT->CYCCNT * 1000.0 / SystemCoreClock
