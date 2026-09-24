@@ -28,15 +28,15 @@ uint8_t button_touch(
 );
 
 STRUCT(Timings,
-	uint16_t thermalPoll;
-	uint16_t touchPoll;
-	uint16_t holdM;
-	uint16_t holdP;
+	float thermalPoll;
+	float touchPoll;
+	float holdM;
+	float holdP;
 );
 
 // ms
 Timings TIMING_CONFIG = {
-	.thermalPoll = 1000,
+	.thermalPoll = 2000,
 	.touchPoll = 100,
 	.holdM = 160,
 	.holdP = 160
@@ -92,12 +92,14 @@ int main(void) {
 	uint16_t touches[] = { 0, 0, 0, 0 };
 	uint8_t touchCount;
 	char targetCaption[8];
+	char tempCaption[24];
 	uint16_t target = 100;
 	uint8_t updateTargetCaption = 1;
 	float dt = 0;
 	while (1) {
 		DT_RESET();
 		touch_poll(&touchCount, touches, SW);
+		if (touchCount > 2) touchCount = 0;
 		IO_UPDATE(io,
 			button_touch(touchCount, touches, RECT_M),
 			button_touch(touchCount, touches, RECT_P)
@@ -114,8 +116,15 @@ int main(void) {
 			updateTargetCaption = 0;
 		}
 
+		timings.thermalPoll += dt;
+		if (timings.thermalPoll > TIMING_CONFIG.thermalPoll) {
+			timings.thermalPoll -= TIMING_CONFIG.thermalPoll;
+			float t = thermal_poll();
+			sprintf(tempCaption, "READING: %5.1f `C", t);
+			display1_stringCentered(gfx, tempCaption, 0x0000, 1, RECT_TRED);
+		}
+
 		dt = DT();
-		// float t = thermal_poll();
 		// status[0] = (uint32_t)(t * 100);
 	}
 }

@@ -6,10 +6,10 @@
 // button size
 #define BS 64
 
-#define RECT_M            0, (SH - BS), BS, BS
-#define RECT_P    (SW - BS), (SH - BS), BS, BS
-#define RECT_TARG        BS, (SH - BS), (SW - BS * 2), BS
-
+#define RECT_M            0, (SH - BS)          , BS, BS
+#define RECT_P    (SW - BS), (SH - BS)          , BS, BS
+#define RECT_TARG        BS, (SH - BS)          , (SW - BS * 2), BS
+#define RECT_TRED         0, (SH - BS - DIGIT_H * 2), SW, DIGIT_H
 #define IO_OFF_M 0
 #define IO_OFF_P 1
 
