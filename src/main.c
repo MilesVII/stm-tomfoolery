@@ -15,7 +15,7 @@ uint8_t io = 0;
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
 DECLARE_ADC(BATT, A, 1, ADC1);
-// DECLARE_GPIO_MIN(MOSFET, A, 1);
+DECLARE_GPIO_MOUT(POWER, A, 2);
 #define BATT_DIV_R1 10.91f
 #define BATT_DIV_R2 32.8f
 #define BATT_DIV_RATIO ((BATT_DIV_R1 + BATT_DIV_R2) / BATT_DIV_R1)
@@ -35,6 +35,7 @@ STRUCT(Timings,
 	float thermalPoll;
 	float touchPoll;
 	float batteryPoll;
+	float power;
 	float holdM;
 	float holdP;
 );
@@ -44,10 +45,13 @@ Timings TIMING_CONFIG = {
 	.thermalPoll = 2000,
 	.touchPoll = 100,
 	.batteryPoll = 2000,
+	.power = 4200,
 	.holdM = 160,
 	.holdP = 160,
 };
 Timings timings = { 0, 0, 0, 0, 0 };
+uint8_t powerState = 0;
+#define TIMING_POWER_IDLE 200
 
 #define BTN_R(K, c) \
 	if (IO_TAP(io, K)) display1_button(gfx, c, 0x1F06, RECT_##K); \
@@ -86,7 +90,7 @@ int main(void) {
 	LED_INIT();
 	BUTT_INIT();
 	BATT_INIT();
-	// MOSFET_INIT(); MOSFET_HIGH();
+	POWER_INIT(); POWER_HIGH();
 
 	display1_init(1);
 	display1_clear(0x00, 0, 0, SW, SH);
@@ -126,23 +130,37 @@ int main(void) {
 			updateTargetCaption = 0;
 		}
 
-		timings.thermalPoll += dt;
-		if (timings.thermalPoll > TIMING_CONFIG.thermalPoll) {
-			timings.thermalPoll -= TIMING_CONFIG.thermalPoll;
-			float t = thermal_poll();
-			sprintf(tempCaption, "READING: %5.1f `C", t);
-			display1_stringCentered(gfx, tempCaption, 0x0000, 1, RECT_L(0));
+		timings.power += dt;
+		if (timings.power > TIMING_CONFIG.power) {
+			timings.power = 0;
 		}
-		timings.batteryPoll += dt;
-		if (timings.batteryPoll > TIMING_CONFIG.batteryPoll) {
-			timings.batteryPoll -= TIMING_CONFIG.batteryPoll;
+		if (timings.power < TIMING_POWER_IDLE && powerState) {
+			powerState = 0;
+			POWER_HIGH();
+			LED_HIGH();
+			display1_stringCentered(gfx, "yIDLE", 0x0000, 1, RECT_L(2));
+		}
+		if (timings.power > TIMING_POWER_IDLE && !powerState) {
+			// poll battery
 			float v = BATT_READ() * BATT_DIV_RATIO;
 			sprintf(gaugeCaption, "VOLTAGE: %5.2fV / %.1f%%", v, (v - 7.0f) / 1.4f * 100);
 			display1_stringCentered(gfx, gaugeCaption, 0x0000, 1, RECT_L(1));
+
+			// poll temp
+			float t = thermal_poll();
+			sprintf(tempCaption, "READING: %5.1f `C", t);
+			display1_stringCentered(gfx, tempCaption, 0x0000, 1, RECT_L(0));
+
+			powerState = 1;
+			if (t < target) {
+				POWER_LOW();
+				LED_LOW();
+				display1_stringCentered(gfx, "gHI", 0x0000, 1, RECT_L(2));
+			} else
+				display1_stringCentered(gfx, "rLO", 0x0000, 1, RECT_L(2));
 		}
 
 		dt = DT();
-		// status[0] = (uint32_t)(t * 100);
 	}
 }
 
