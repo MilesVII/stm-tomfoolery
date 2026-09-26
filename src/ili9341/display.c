@@ -205,7 +205,14 @@ void display1_number(uint16_t* gfx, uint16_t v, uint16_t atX, uint16_t atY) {
 void display1_string(uint16_t* gfx, char* v, uint16_t back, uint16_t atX, uint16_t atY) {
 	uint16_t l = strlen(v);
 	for (uint16_t i = 0; i < l; ++i) {
-		display1_digit(gfx, v[i], atX + DIGIT_W * i, atY, back, 0xFFFF);
+		uint16_t color = 0xFFFF;
+		if (v[i] == 'r') { color = 0x00F8; v[i] = 10; }
+		if (v[i] == 'g') { color = 0xE007; v[i] = 10; }
+		if (v[i] == 'b') { color = 0x1F00; v[i] = 10; }
+		if (v[i] == 'y') { color = 0xE0FF; v[i] = 10; }
+		if (v[i] == 'c') { color = 0xFF07; v[i] = 10; }
+		if (v[i] == 'm') { color = 0x1FF8; v[i] = 10; }
+		display1_digit(gfx, v[i], atX + DIGIT_W * i, atY, back, color);
 	}
 }
 void display1_stringCentered(uint16_t* gfx, char* caption, uint16_t back, uint8_t fullClear, uint16_t atX, uint16_t atY, uint16_t w, uint16_t h) {
