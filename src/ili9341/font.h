@@ -67,6 +67,13 @@
 	0b0111, \
 	0b0001, \
 	0b0111
+#define FONT_FULL \
+		0b0111, \
+		0b0111, \
+		0b0111, \
+		0b0111, \
+		0b0111
+
 static const uint8_t font[BYTES_PER_CHAR * 128] = {
 	C(FONT_0), // 0
 	C(FONT_1), // 1
@@ -78,13 +85,7 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 	C(FONT_7), // 7
 	C(FONT_8), // 8
 	C(FONT_9), // 9
-	C(
-		0b0111,
-		0b0111,
-		0b0111,
-		0b0111,
-		0b0111
-	), // 10
+	C(FONT_FULL), // 10
 	SKIP, // 11
 	SKIP, // 12
 	SKIP, // 13
@@ -298,11 +299,11 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 		0b0101
 	), // 78/N
 	C(
-		0b0010,
+		0b0110,
 		0b0101,
 		0b0101,
 		0b0101,
-		0b0010
+		0b0011
 	), // 79/O
 	C(
 		0b0110,
@@ -394,30 +395,30 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 		0b0000
 	), // 96/`
 	SKIP, // 97/a
-	SKIP, // 98/b
-	SKIP, // 99/c
+	C(FONT_FULL), // 98/b
+	C(FONT_FULL), // 99/c
 	SKIP, // 100/d
 	SKIP, // 101/e
 	SKIP, // 102/f
-	SKIP, // 103/g
+	C(FONT_FULL), // 103/g
 	SKIP, // 104/h
 	SKIP, // 105/i
 	SKIP, // 106/j
 	SKIP, // 107/k
 	SKIP, // 108/l
-	SKIP, // 109/m
+	C(FONT_FULL), // 109/m
 	SKIP, // 110/n
 	SKIP, // 111/o
 	SKIP, // 112/p
 	SKIP, // 113/q
-	SKIP, // 114/r
+	C(FONT_FULL), // 114/r
 	SKIP, // 115/s
 	SKIP, // 116/t
 	SKIP, // 117/u
 	SKIP, // 118/v
 	SKIP, // 119/w
 	SKIP, // 120/x
-	SKIP, // 121/y
+	C(FONT_FULL), // 121/y
 	SKIP, // 122/z
 	SKIP, // 123/{
 	SKIP, // 124/|

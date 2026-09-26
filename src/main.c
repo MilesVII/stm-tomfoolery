@@ -95,6 +95,8 @@ int main(void) {
 	display1_button(gfx, "-", 0x0000, RECT_M);
 	display1_button(gfx, "+", 0x0000, RECT_P);
 
+	display1_stringCentered(gfx, "rgbcmy  gONLINE", 0x0000, 1, RECT_L(2));
+
 	// uint32_t status[1] = { 0.0f };
 	uint16_t touches[] = { 0, 0, 0, 0 };
 	uint8_t touchCount;
@@ -129,14 +131,14 @@ int main(void) {
 			timings.thermalPoll -= TIMING_CONFIG.thermalPoll;
 			float t = thermal_poll();
 			sprintf(tempCaption, "READING: %5.1f `C", t);
-			display1_stringCentered(gfx, tempCaption, 0x0000, 1, RECT_TRED);
+			display1_stringCentered(gfx, tempCaption, 0x0000, 1, RECT_L(0));
 		}
 		timings.batteryPoll += dt;
 		if (timings.batteryPoll > TIMING_CONFIG.batteryPoll) {
 			timings.batteryPoll -= TIMING_CONFIG.batteryPoll;
 			float v = BATT_READ() * BATT_DIV_RATIO;
 			sprintf(gaugeCaption, "VOLTAGE: %5.2fV / %.1f%%", v, (v - 7.0f) / 1.4f * 100);
-			display1_stringCentered(gfx, gaugeCaption, 0x0000, 1, RECT_BATT);
+			display1_stringCentered(gfx, gaugeCaption, 0x0000, 1, RECT_L(1));
 		}
 
 		dt = DT();
