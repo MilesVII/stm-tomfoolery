@@ -16,6 +16,9 @@ DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
 DECLARE_ADC(BATT, A, 1, ADC1);
 // DECLARE_GPIO_MIN(MOSFET, A, 1);
+#define BATT_DIV_R1 10.91f
+#define BATT_DIV_R2 32.8f
+#define BATT_DIV_RATIO ((BATT_DIV_R1 + BATT_DIV_R2) / BATT_DIV_R1)
 
 #define STRUCT(name, fields) \
 	struct name { \
@@ -40,7 +43,7 @@ STRUCT(Timings,
 Timings TIMING_CONFIG = {
 	.thermalPoll = 2000,
 	.touchPoll = 100,
-	.batteryPoll = 12000,
+	.batteryPoll = 2000,
 	.holdM = 160,
 	.holdP = 160,
 };
@@ -131,8 +134,8 @@ int main(void) {
 		timings.batteryPoll += dt;
 		if (timings.batteryPoll > TIMING_CONFIG.batteryPoll) {
 			timings.batteryPoll -= TIMING_CONFIG.batteryPoll;
-			float v = BATT_READ() * 4.0f;
-			sprintf(gaugeCaption, "VOLTAGE: %5.3fV / %.1f%%", v, (v - 7.0f) / 1.4f * 100);
+			float v = BATT_READ() * BATT_DIV_RATIO;
+			sprintf(gaugeCaption, "VOLTAGE: %5.2fV / %.1f%%", v, (v - 7.0f) / 1.4f * 100);
 			display1_stringCentered(gfx, gaugeCaption, 0x0000, 1, RECT_BATT);
 		}
 

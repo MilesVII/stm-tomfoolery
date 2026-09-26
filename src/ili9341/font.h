@@ -111,7 +111,13 @@ static const uint8_t font[BYTES_PER_CHAR * 128] = {
 	SKIP, // 34/"
 	SKIP, // 35/#
 	SKIP, // 36/$
-	SKIP, // 37/%
+	C(
+		0b0101,
+		0b0001,
+		0b0010,
+		0b0100,
+		0b0101
+	), // 37/%
 	SKIP, // 38/&
 	SKIP, // 39/'
 	SKIP, // 40/(
