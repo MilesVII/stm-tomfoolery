@@ -19,6 +19,8 @@ DECLARE_GPIO_MOUT(POWER, A, 2);
 #define BATT_DIV_R1 10.91f
 #define BATT_DIV_R2 32.8f
 #define BATT_DIV_RATIO ((BATT_DIV_R1 + BATT_DIV_R2) / BATT_DIV_R1)
+#define BATT_MAX (4.17 * 2)
+#define BATT_MIN (3.0 * 2)
 
 #define STRUCT(name, fields) \
 	struct name { \
@@ -90,7 +92,7 @@ int main(void) {
 	LED_INIT();
 	BUTT_INIT();
 	BATT_INIT();
-	POWER_INIT(); POWER_HIGH();
+	POWER_INIT(); POWER_LOW();
 
 	display1_init(1);
 	display1_clear(0x00, 0, 0, SW, SH);
@@ -136,14 +138,19 @@ int main(void) {
 		}
 		if (timings.power < TIMING_POWER_IDLE && powerState) {
 			powerState = 0;
-			POWER_HIGH();
+			POWER_LOW();
 			LED_HIGH();
 			display1_stringCentered(gfx, "yIDLE", 0x0000, 1, RECT_L(2));
 		}
 		if (timings.power > TIMING_POWER_IDLE && !powerState) {
 			// poll battery
 			float v = BATT_READ() * BATT_DIV_RATIO;
-			sprintf(gaugeCaption, "VOLTAGE: %5.2fV / %.1f%%", v, (v - 7.0f) / 1.4f * 100);
+			sprintf(
+				gaugeCaption,
+				"VOLTAGE: %5.2fV / %.1f%%",
+				v,
+				(v - BATT_MIN) / (BATT_MAX - BATT_MIN) * 100
+			);
 			display1_stringCentered(gfx, gaugeCaption, 0x0000, 1, RECT_L(1));
 
 			// poll temp
@@ -153,7 +160,7 @@ int main(void) {
 
 			powerState = 1;
 			if (t < target) {
-				POWER_LOW();
+				POWER_HIGH();
 				LED_LOW();
 				display1_stringCentered(gfx, "gHI", 0x0000, 1, RECT_L(2));
 			} else
