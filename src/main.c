@@ -1,41 +1,53 @@
 #include "stm32f411xe.h"
 #include "hal_at_home.h"
 #include "flash/flash25q64.h"
-#include "tusb.h"
+#include "msc_disk.h"
 #include "usb/board.h"
+#include "tusb.h"
 
-// Forward declarations for MSC disk cache
-void msc_disk_init(void);
-void msc_disk_pending_flush(void);
+// Hold KEY (PA0, active low) this long to erase the whole flash chip.
+#define ERASE_HOLD_MS 2000u
 
 DECLARE_GPIO_MOUT(LED, C, 13);
 DECLARE_GPIO_MIN(BUTT, A, 0);
 
-static void ledOff() {
-	LED_HIGH();
-}
-static void ledOn() {
-	LED_LOW();
-}
+// PC13 is active low on the blackpill
+static void ledOn(void)  { LED_LOW(); }
+static void ledOff(void) { LED_HIGH(); }
 
 // Hard fault indicator: LED on solid
 void HardFault_Handler(void) {
-	// Ensure GPIOC is enabled and PC13 is output
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
-	GPIOC->MODER |= (1U << (13 * 2));
+	MODER(GPIOC, 13, 1);
 	ledOn();
 	while (1) __NOP();
 }
 
-static void blink(uint32_t count, uint32_t duration) {
-	for (int i = 0; i < count * 2; i++) {
-		if (i & 1) ledOn(); else ledOff();
-		delay_ms(duration);
+// Flash chip missing or not answering: two quick blinks, pause, forever.
+static void halt_no_flash(void) {
+	while (1) {
+		for (int i = 0; i < 2; i++) {
+			ledOn();  delay_ms(100);
+			ledOff(); delay_ms(100);
+		}
+		delay_ms(600);
 	}
-	ledOff();
 }
 
-uint8_t sig[3] = { 0x07, 0xF7, 0x77 };
+// LED status patterns, in (on_ms, period_ms):
+//   chip erase running    100 / 200   (fast flicker)
+//   flash write failed     50 / 100   (frantic flicker)
+//   mounted by a host      50 / 1000  (heartbeat)
+//   plugged in, not mounted 250 / 500
+static void led_task(uint32_t now) {
+	uint32_t on, period;
+	if (msc_disk_erasing())    { on = 100; period = 200; }
+	else if (msc_disk_error()) { on = 50;  period = 100; }
+	else if (tud_mounted())    { on = 50;  period = 1000; }
+	else                       { on = 250; period = 500; }
+
+	if (now % period < on) ledOn(); else ledOff();
+}
 
 int main(void) {
 	RCC->AHB1ENR |=
@@ -44,58 +56,36 @@ int main(void) {
 		RCC_AHB1ENR_GPIOCEN;
 
 	LED_INIT();
-
 	ledOff();
-	// blink(1, 300);
+	BUTT_INIT();
 
-	// Initialize board (clocks, GPIO, USB pins, SysTick)
-	board_init();
-	SysTick_Config(SystemCoreClock / 1000);
-	delay_ms(100);
+	board_init(); // 84 MHz, SysTick, USB pins and interrupt
 
-	// Initialize flash chip
-	flash25q64_init();
-
-	delay_ms(100);
-
-	// Initialize MSC disk write-back cache
+	if (!flash25q64_init()) halt_no_flash();
 	msc_disk_init();
 
-	// Initialize TinyUSB device stack on roothub port 0
-	tusb_rhport_init_t dev_init = {.role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_FULL};
+	tusb_rhport_init_t dev_init = { .role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_FULL };
 	tusb_init(BOARD_TUD_RHPORT, &dev_init);
 
-	// Post-TinyUSB init (if needed)
-	board_init_after_tusb();
-
-	// All init passed: LED off, then enter normal loop
-	ledOff();
+	uint32_t press_start = 0;
+	bool erase_armed = true;
 
 	while (1) {
-		if (!BUTT_READ()) {
-			flash25q64_chip_erase();
-		}
-		// TinyUSB device task
 		tud_task();
+		msc_disk_task();
 
-		// // Flush MSC write-back cache when safe-removal was requested.
-		// // We defer the actual flash erase+write out of the USB callback
-		// // so the host doesn't time out during the ~50 ms flash operation.
-		msc_disk_pending_flush();
+		uint32_t now = ticks;
 
-		// // LED blink: fast when not mounted, slow when mounted
-		static uint32_t last_blink = 0;
-		static bool led_state = false;
-		uint32_t now = tusb_time_millis_api();
-
-		if (now - last_blink >= (tud_mounted() ? 1000 : 250)) {
-			last_blink = now;
-			led_state = !led_state;
-			if (led_state) {
-				ledOn();
-			} else {
-				ledOff();
-			}
+		// Long press on KEY wipes the chip; release re-arms it.
+		bool pressed = !BUTT_READ();
+		if (!pressed) {
+			press_start = now;
+			erase_armed = true;
+		} else if (erase_armed && now - press_start >= ERASE_HOLD_MS) {
+			erase_armed = false;
+			msc_disk_chip_erase_start();
 		}
+
+		led_task(now);
 	}
 }

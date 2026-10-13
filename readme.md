@@ -26,19 +26,38 @@ A6 MISO
 A7 MOSI
 ```
 
-## ILI9341/V
-display
+# flash drive (this branch)
+The board enumerates as a USB mass storage device whose blocks map 1:1 onto
+the flash chip: LBA `n` is flash bytes `n*512 .. n*512+511`, 16384 blocks in
+total. There is no filesystem layer; whatever the host writes lands in the
+chip verbatim. A blank or non-FAT chip therefore shows up as "needs
+formatting"; formatting it writes a FAT image into the chip, raw reads with
+e.g. `dd` work regardless.
 
+## build
 ```
-LED(ignored) -> 3V via 100ohm
-
-SPI2 AF5:
-(hanging) SDO/MISO
-B13 SCK
-B15 SDI/MOSI
-
-GPIO:
-B14 DC
-B12 RESET
-A8 CS (soft NSS)
+git submodule update --init
+build.bat
+flash.bat
 ```
+TinyUSB is a submodule, pinned by the repo. `build.bat` needs `arm-none-eabi-gcc` on
+the path and writes `bin/firmware.bin`; `flash.bat` pushes it over DFU.
+
+## behaviour
+- Writes are gathered per 4 KiB flash sector in RAM and committed when the host
+  finishes a WRITE command, syncs, ejects, or after 250 ms of silence. A sector
+  is erased only when some bit has to go back to 1; unchanged pages are skipped
+  and every committed sector is read back and verified.
+- Hold KEY (PA0) for 2 s to erase the whole chip. The drive reports "no medium"
+  while the erase runs (20 s or so) and comes back by itself.
+- SPI runs at 10.5 MHz (`FLASH25Q64_SPI_BR` in `src/flash/flash25q64.c`).
+
+## LED (PC13)
+| pattern                     | meaning                              |
+| --------------------------- | ------------------------------------ |
+| short blip every second     | mounted by a host                    |
+| 50% blink, 2 Hz             | plugged in, not mounted              |
+| fast flicker               | chip erase in progress               |
+| frantic flicker             | a flash write failed verification    |
+| two blinks, pause           | flash chip not found (bad JEDEC ID)  |
+| solid on                    | hard fault or clock failure          |

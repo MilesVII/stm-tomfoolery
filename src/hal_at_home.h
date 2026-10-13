@@ -108,4 +108,6 @@
 		TIM4->CR1 |= TIM_CR1_ARPE | TIM_CR1_CEN; \
 	}
 
+// 1 ms SysTick counter (hal_at_home.c)
+extern volatile uint32_t ticks;
 void delay_ms(uint32_t ms);

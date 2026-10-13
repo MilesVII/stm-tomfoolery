@@ -1,169 +1,169 @@
+#include <string.h>
 #include "tusb.h"
+#include "hal_at_home.h"
+#include "msc_disk.h"
 #include "flash/flash25q64.h"
 
-#if CFG_TUD_MSC
+#define BLOCK_SIZE   512u
+#define BLOCK_COUNT  (FLASH25Q64_SIZE / BLOCK_SIZE)
+#define SECTOR_SIZE  FLASH25Q64_SECTOR_SIZE
+
+// Not in the TinyUSB SCSI enum; hosts send these on sync / unmount.
+#define SCSI_CMD_SYNCHRONIZE_CACHE_10  0x35
+#define SCSI_CMD_SYNCHRONIZE_CACHE_16  0x91
+
+// Flush on our own if the host goes quiet mid-command for this long.
+#define IDLE_FLUSH_MS   250u
+#define ERASE_POLL_MS   50u
 
 //--------------------------------------------------------------------+
-// MACRO CONSTANT TYPEDEF PROTOTYPES
+// Single-sector write-back buffer
 //--------------------------------------------------------------------+
 
-// Disk geometry: 8 MiB flash, 512-byte sectors
-#define DISK_BLOCK_NUM    (8 * 1024 * 1024 / 512)  // 16384 sectors
-#define DISK_BLOCK_SIZE   512
+static uint8_t  wb_data[SECTOR_SIZE];
+static uint32_t wb_addr = UINT32_MAX; // sector base address, UINT32_MAX = empty
+static bool     wb_dirty;
+static uint32_t wb_last_write_ms;
 
-//--------------------------------------------------------------------+
-// Write-back cache
-//--------------------------------------------------------------------+
-// Flash-backed MSC requires 4 KiB sector erase before programming.
-// To avoid read-modify-erase-write on every 512-byte USB write, we
-// cache multiple 4 KiB flash sectors in RAM and flush only when the
-// cache is full or on safe-removal (START STOP UNIT with LOAD_EJECT).
+static bool media_present = true;     // false while the chip is being erased
+static bool io_error;
 
-#define CACHE_NUM_SLOTS  4  // 4 x 4 KiB = 16 KiB RAM
-
-typedef struct {
-	uint32_t sector_base;   // 0xFFFFFFFF = invalid/empty
-	uint8_t  data[FLASH25Q64_SECTOR_SIZE];
-	bool     dirty;
-	bool     valid;
-} cache_slot_t;
-
-static cache_slot_t cache[CACHE_NUM_SLOTS];
-static bool flush_requested;
-
-static void cache_flush_slot(cache_slot_t *slot) {
-	if (slot->dirty && slot->valid) {
-		flash25q64_erase_and_write(slot->sector_base, slot->data, FLASH25Q64_SECTOR_SIZE);
-		slot->dirty = false;
-	}
+static bool wb_flush(void) {
+	if (!wb_dirty) return true;
+	wb_dirty = false;
+	if (flash25q64_write_sector(wb_addr, wb_data)) return true;
+	io_error = true;
+	wb_addr = UINT32_MAX; // flash contents are unknown now, stop serving reads from it
+	return false;
 }
 
-static void cache_flush_all(void) {
-	for (int i = 0; i < CACHE_NUM_SLOTS; i++) {
-		cache_flush_slot(&cache[i]);
-	}
+// Point the buffer at `sector`, loading it from flash unless the caller is
+// about to overwrite all of it anyway.
+static bool wb_select(uint32_t sector, bool whole_sector) {
+	if (wb_addr == sector) return true;
+	if (!wb_flush()) return false;
+	wb_addr = sector;
+	if (!whole_sector) flash25q64_read(sector, wb_data, SECTOR_SIZE);
+	return true;
 }
 
-static cache_slot_t *cache_find_or_alloc(uint32_t sector_base) {
-	// Check if sector is already cached
-	for (int i = 0; i < CACHE_NUM_SLOTS; i++) {
-		if (cache[i].valid && cache[i].sector_base == sector_base) {
-			return &cache[i];
-		}
-	}
+static bool disk_write(uint32_t addr, const uint8_t* src, uint32_t len) {
+	while (len) {
+		uint32_t sector = addr & ~(SECTOR_SIZE - 1);
+		uint32_t off = addr - sector;
+		uint32_t n = SECTOR_SIZE - off;
+		if (n > len) n = len;
 
-	// Find an empty slot
-	for (int i = 0; i < CACHE_NUM_SLOTS; i++) {
-		if (!cache[i].valid) {
-			cache[i].sector_base = sector_base;
-			cache[i].valid = true;
-			cache[i].dirty = false;
-			flash25q64_read(sector_base, cache[i].data, FLASH25Q64_SECTOR_SIZE);
-			return &cache[i];
-		}
-	}
+		if (!wb_select(sector, off == 0 && n == SECTOR_SIZE)) return false;
+		memcpy(wb_data + off, src, n);
+		wb_dirty = true;
 
-	// All slots full: evict slot 0 (simple policy; could be LRU)
-	cache_flush_slot(&cache[0]);
-	cache[0].sector_base = sector_base;
-	cache[0].dirty = false;
-	flash25q64_read(sector_base, cache[0].data, FLASH25Q64_SECTOR_SIZE);
-	return &cache[0];
+		addr += n;
+		src += n;
+		len -= n;
+	}
+	wb_last_write_ms = ticks;
+	return true;
+}
+
+static void disk_read(uint32_t addr, uint8_t* dst, uint32_t len) {
+	while (len) {
+		uint32_t sector = addr & ~(SECTOR_SIZE - 1);
+		uint32_t off = addr - sector;
+		uint32_t n = SECTOR_SIZE - off;
+		if (n > len) n = len;
+
+		if (sector == wb_addr) {
+			memcpy(dst, wb_data + off, n);
+		} else {
+			flash25q64_read(addr, dst, n);
+		}
+
+		addr += n;
+		dst += n;
+		len -= n;
+	}
 }
 
 //--------------------------------------------------------------------+
 // Public API
 //--------------------------------------------------------------------+
 
-// Initialize the write-back cache state.
-// Must be called before any MSC callbacks are invoked.
 void msc_disk_init(void) {
-	for (int i = 0; i < CACHE_NUM_SLOTS; i++) {
-		cache[i].sector_base = 0xFFFFFFFF;
-		cache[i].dirty = false;
-		cache[i].valid = false;
-	}
-	flush_requested = false;
+	wb_addr = UINT32_MAX;
+	wb_dirty = false;
+	media_present = true;
+	io_error = false;
 }
 
-// Flush all dirty cached sectors to flash.
-// Call this from the main loop when safe to block for ~50 ms per dirty sector.
-void msc_disk_flush(void) {
-	cache_flush_all();
+bool msc_disk_flush(void) {
+	return wb_flush();
 }
 
-// Check if a flush was requested (e.g. by safe-removal) and flush if so.
-bool msc_disk_pending_flush(void) {
-	if (flush_requested) {
-		flush_requested = false;
-		msc_disk_flush();
-		return true;
+void msc_disk_task(void) {
+	static uint32_t last_poll;
+
+	if (!media_present) {
+		if (ticks - last_poll >= ERASE_POLL_MS) {
+			last_poll = ticks;
+			if (!flash25q64_busy()) media_present = true;
+		}
+		return;
 	}
-	return false;
+	if (wb_dirty && ticks - wb_last_write_ms >= IDLE_FLUSH_MS) {
+		wb_flush();
+	}
+}
+
+bool msc_disk_chip_erase_start(void) {
+	if (!media_present) return false;
+	// Everything is about to become 0xFF; whatever was buffered is moot.
+	wb_dirty = false;
+	wb_addr = UINT32_MAX;
+	if (!flash25q64_chip_erase_start()) {
+		io_error = true;
+		return false;
+	}
+	media_present = false;
+	return true;
+}
+
+bool msc_disk_erasing(void) {
+	return !media_present;
+}
+
+bool msc_disk_error(void) {
+	return io_error;
 }
 
 //--------------------------------------------------------------------+
-// Flash-backed MSC callbacks
+// TinyUSB MSC callbacks
 //--------------------------------------------------------------------+
 
-// Invoked when received SCSI_CMD_INQUIRY
-uint32_t tud_msc_inquiry2_cb(uint8_t lun, scsi_inquiry_resp_t *inquiry_resp, uint32_t bufsize) {
+// SCSI strings are space padded, not NUL terminated.
+static void pad_copy(uint8_t* dst, uint32_t n, const char* s) {
+	uint32_t i = 0;
+	for (; i < n && s[i]; i++) dst[i] = (uint8_t)s[i];
+	for (; i < n; i++) dst[i] = 0x20;
+}
+
+void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]) {
 	(void) lun;
-	(void) bufsize;
-
-	const char vid[] = "Custom";
-	const char pid[] = "STM32F411 Flash";
-	const char rev[] = "1.0";
-
-	(void) strncpy((char*) inquiry_resp->vendor_id, vid, 8);
-	(void) strncpy((char*) inquiry_resp->product_id, pid, 16);
-	(void) strncpy((char*) inquiry_resp->product_rev, rev, 4);
-
-	return sizeof(scsi_inquiry_resp_t);
+	pad_copy(vendor_id, 8, "STM32");
+	pad_copy(product_id, 16, "W25Q64 flash");
+	pad_copy(product_rev, 4, "1.0");
 }
 
-// Invoked when received Test Unit Ready command
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {
 	(void) lun;
-	return true;
+	// TinyUSB reports NOT READY / MEDIUM NOT PRESENT for us when this is false.
+	return media_present;
 }
 
-// Invoked when received SCSI_CMD_READ_CAPACITY_10 and SCSI_CMD_READ_FORMAT_CAPACITY
-void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count, uint16_t *block_size) {
+void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_size) {
 	(void) lun;
-	*block_count = DISK_BLOCK_NUM;
-	*block_size = DISK_BLOCK_SIZE;
-}
-
-// Invoked when received Start Stop Unit command
-bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject) {
-	(void) lun;
-	(void) power_condition;
-	(void) start;
-	if (load_eject) {
-		// Defer the slow flash flush to the main loop so we don't block
-		// the USB stack inside this callback.
-		flush_requested = true;
-	}
-	return true;
-}
-
-// Callback invoked when received READ10 command
-int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize) {
-	(void) lun;
-
-	if (lba >= DISK_BLOCK_NUM) {
-		return -1;
-	}
-
-	uint32_t flash_addr = lba * DISK_BLOCK_SIZE + offset;
-	uint32_t sector_base = flash_addr & ~(FLASH25Q64_SECTOR_SIZE - 1);
-
-	// Find or load the sector into cache, then serve from there
-	cache_slot_t *slot = cache_find_or_alloc(sector_base);
-	memcpy(buffer, slot->data + (flash_addr - sector_base), bufsize);
-
-	return (int32_t) bufsize;
+	*block_count = BLOCK_COUNT;
+	*block_size = BLOCK_SIZE;
 }
 
 bool tud_msc_is_writable_cb(uint8_t lun) {
@@ -171,37 +171,80 @@ bool tud_msc_is_writable_cb(uint8_t lun) {
 	return true;
 }
 
-// Callback invoked when received WRITE10 command
-int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize) {
+bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject) {
 	(void) lun;
+	(void) power_condition;
+	// "Safely remove" / eject
+	if (load_eject && !start) wb_flush();
+	return true;
+}
 
-	if (lba >= DISK_BLOCK_NUM) {
-		return -1;
-	}
+bool tud_msc_prevent_allow_medium_removal_cb(uint8_t lun, uint8_t prohibit_removal, uint8_t control) {
+	(void) lun;
+	(void) control;
+	if (!prohibit_removal) wb_flush();
+	return true;
+}
 
-	uint32_t flash_addr = lba * DISK_BLOCK_SIZE + offset;
-	uint32_t sector_base = flash_addr & ~(FLASH25Q64_SECTOR_SIZE - 1);
+int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize) {
+	(void) lun;
+	if (!media_present || lba >= BLOCK_COUNT) return TUD_MSC_RET_ERROR;
 
-	// 	flash25q64_erase_and_write(sector_base, buffer, bufsize);
-	// Find or load the sector into cache, then apply the write
-	cache_slot_t *slot = cache_find_or_alloc(sector_base);
-	memcpy(slot->data + (flash_addr - sector_base), buffer, bufsize);
-	slot->dirty = true;
+	uint32_t addr = lba * BLOCK_SIZE + offset;
+	if (addr >= FLASH25Q64_SIZE) return TUD_MSC_RET_ERROR;
+	if (bufsize > FLASH25Q64_SIZE - addr) bufsize = FLASH25Q64_SIZE - addr;
 
+	disk_read(addr, buffer, bufsize);
 	return (int32_t) bufsize;
 }
 
-// Callback invoked when received an SCSI command not in built-in list
-int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void *buffer, uint16_t bufsize) {
+int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
 	(void) lun;
-	(void) scsi_cmd;
+	if (!media_present || lba >= BLOCK_COUNT) return TUD_MSC_RET_ERROR;
+
+	uint32_t addr = lba * BLOCK_SIZE + offset;
+	if (addr >= FLASH25Q64_SIZE) return TUD_MSC_RET_ERROR;
+	if (bufsize > FLASH25Q64_SIZE - addr) bufsize = FLASH25Q64_SIZE - addr;
+
+	if (!disk_write(addr, buffer, bufsize)) return TUD_MSC_RET_ERROR;
+	return (int32_t) bufsize;
+}
+
+// The host considers the data written once the WRITE command completes, and
+// the Windows default "quick removal" policy never asks for a sync afterwards.
+void tud_msc_write10_complete_cb(uint8_t lun) {
+	(void) lun;
+	wb_flush();
+}
+
+int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize) {
 	(void) buffer;
 	(void) bufsize;
 
-	// Set Sense = Invalid Command Operation
-	tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00);
+	switch (scsi_cmd[0]) {
+		case SCSI_CMD_SYNCHRONIZE_CACHE_10:
+		case SCSI_CMD_SYNCHRONIZE_CACHE_16:
+			if (!wb_flush()) {
+				tud_msc_set_sense(lun, SCSI_SENSE_MEDIUM_ERROR, 0x0C, 0x00); // WRITE ERROR
+				return TUD_MSC_RET_ERROR;
+			}
+			return 0;
 
-	return -1;
+		default:
+			tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00); // INVALID COMMAND OPERATION CODE
+			return TUD_MSC_RET_ERROR;
+	}
 }
 
-#endif
+//--------------------------------------------------------------------+
+// Device callbacks: last chance to commit before the link goes away
+//--------------------------------------------------------------------+
+
+void tud_umount_cb(void) {
+	wb_flush();
+}
+
+void tud_suspend_cb(bool remote_wakeup_en) {
+	(void) remote_wakeup_en;
+	wb_flush();
+}
