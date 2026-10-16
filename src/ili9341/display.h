@@ -6,7 +6,13 @@
 #define DIGIT_W 8
 #define DIGIT_H 10
 
+// MADCTL values for display1_madctl
+#define DISPLAY1_PORTRAIT   0x08  // 240 wide, 320 tall (default)
+#define DISPLAY1_LANDSCAPE  0x28  // 320 wide, 240 tall; add 0x40 / 0x80 to mirror
+
 void display1_init(uint8_t isV);
+// Memory access control: orientation and RGB order. Set the window afterwards.
+void display1_madctl(uint8_t madctl);
 uint32_t display1_setWindow(
 	uint16_t x0, uint16_t y0,
 	uint16_t w, uint16_t h

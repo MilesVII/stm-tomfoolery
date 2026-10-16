@@ -78,8 +78,10 @@
 	static void name##_HIGH() { PIN_SET(GPIO##port, GPIO_PIN(pin)); } \
 	static void name##_LOW()  { PIN_CLR(GPIO##port, GPIO_PIN(pin)); } \
 	static void name##_INIT() { MODER(GPIO##port, pin, 1); name##_HIGH(); }
+// Input with pull-up. Sets MODER explicitly: the JTAG pins (PA15, PB3, PB4)
+// come out of reset in alternate function mode.
 #define DECLARE_GPIO_MIN(name, port, pin) \
-	static    void name##_INIT() { PUPDR(GPIO##port, pin, 1); } \
+	static    void name##_INIT() { MODER(GPIO##port, pin, 0); PUPDR(GPIO##port, pin, 1); } \
 	static uint8_t name##_READ() { return GPIO##port->IDR & (1 << pin); }
 
 // DWT cycle counter
@@ -91,14 +93,15 @@
 	DWT->CYCCNT = 0; \
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; \
 
-#define CLOCK_TIM_CLK 16000000UL
+// Square wave on TIM4 CH3 (PB8, AF2). TIM4 runs at SYSCLK as long as the APB1
+// prescaler is 1 or 2 (timer clocks double when their bus is divided).
 #define DECLARE_CLOCK(name, port, pin) \
 	static void name##_INIT(uint32_t freq_hz) { \
 		RCC->APB1ENR |= RCC_APB1ENR_TIM4EN; \
 		MODER(GPIO##port, pin, 2); \
 		AFR(GPIO##port, pin, 2); \
 		OSPEEDR(GPIO##port, pin, 3); \
-		uint32_t arr = (CLOCK_TIM_CLK / freq_hz) - 1; \
+		uint32_t arr = (SystemCoreClock / freq_hz) - 1; \
 		TIM4->PSC = 0; \
 		TIM4->ARR = arr; \
 		TIM4->CCR3 = (arr + 1) / 2; \
@@ -108,4 +111,10 @@
 		TIM4->CR1 |= TIM_CR1_ARPE | TIM_CR1_CEN; \
 	}
 
+// 1 ms SysTick counter (hal_at_home.c)
+extern volatile uint32_t ticks;
 void delay_ms(uint32_t ms);
+
+// 84 MHz SYSCLK from the PLL (25 MHz HSE, HSI fallback): AHB 84, APB2 84,
+// APB1 42, USB 48 MHz. Updates SystemCoreClock; call SysTick_Config after it.
+void clock_init_84mhz(void);

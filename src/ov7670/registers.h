@@ -122,3 +122,17 @@
 #define REG_HAECC6      0xa9    /* Hist AEC/AGC control 6 */
 #define REG_HAECC7      0xaa    /* Hist AEC/AGC control 7 */
 #define REG_BD60MAX     0xab    /* 60hz banding step limit */
+
+// additions (names as in the Linux ov7670 driver)
+#define REG_DBLV        0x6b    /* PLL control and debugging */
+#define DBLV_BYPASS     0x0a    /* bypass PLL */
+#define DBLV_X4         0x4a    /* input clock x4 */
+#define REG_SCALING_XSC 0x70    /* test pattern bit 7, horizontal scale factor */
+#define REG_SCALING_YSC 0x71    /* test pattern bit 7, vertical scale factor */
+#define REG_SCALING_DCWCTR     0x72
+#define REG_SCALING_PCLK_DIV   0x73
+#define REG_SCALING_PCLK_DELAY 0xa2
+#define TEST_PATTERN_0  0x80    /* in SCALING_XSC */
+#define TEST_PATTERN_1  0x80    /* in SCALING_YSC */
+#define OV7670_PID      0x76
+#define OV7670_VER      0x73

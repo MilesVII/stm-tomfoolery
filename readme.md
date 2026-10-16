@@ -11,10 +11,10 @@ avoid: `A9`, `A10`
 
 ## OV7670
 ```
-RST B2
+RST  B2
 PWDN B1
-HS  B9 -> A3
-VS  A1
+HS   A3
+VS   A1
 
 I2C1 AF4:
 B6 SCL
@@ -29,6 +29,8 @@ D4 A15
 D5 B3
 D6 B4
 D7 B5
+(D0-D3, D4 and D5-D7 are each contiguous on their port, the
+capture loop depends on that: see bus_byte in camera.c)
 
 clocks:
 PLK A2
@@ -106,3 +108,29 @@ GPIO:
 A15 NSS (soft)
 B6 IRQ
 ```
+
+# camera (this branch)
+OV7670 without FIFO, bit-banged. The MCU runs at 84 MHz from the PLL, feeds
+the sensor 12 MHz on XCLK and reads QVGA RGB565 frames pixel by pixel, keeping
+them as RGB332 (76800 bytes) since a full RGB565 frame does not fit in RAM.
+Frames stream to the ILI9341 in landscape, about 2 per second.
+
+- The sensor is configured with the register tables from the Linux ov7670
+  driver (default set, RGB565 set, QVGA window), then DBLV = PLL bypass and
+  CLKRC = `CAMERA_CLKRC` (camera.c). PCLK = 12 MHz / (CLKRC + 1): lower CLKRC
+  for more fps, raise it if frames come out torn.
+- KEY (PA0) toggles the sensor color bars. If the bars look right the data
+  bus and capture loop are fine and any remaining problem is optics/exposure.
+- The capture loop needs `-O2`; `-O0` is too slow to keep up with PCLK.
+
+## LED (PC13) / screen
+| what                          | meaning                                          |
+| ----------------------------- | ------------------------------------------------ |
+| short flash per frame         | capturing and displaying                         |
+| 1 blink, pause                | nothing answers on SCCB (wiring, power, pull-ups)|
+| 2 blinks, pause               | SCCB answers but PID is not 0x76                 |
+| 3 blinks, pause               | a register write failed mid-setup                |
+| solid on                      | clock init failed                                |
+
+On a camera error the screen shows the error number and PID<<8|VER as a
+decimal (30323 = 0x7673 = OV7670).

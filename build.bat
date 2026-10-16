@@ -1,5 +1,8 @@
+@echo off
+if not exist bin mkdir bin
 arm-none-eabi-gcc ^
 	--specs=nosys.specs -mcpu=cortex-m4 -mthumb -O2 ^
+	-Wall ^
 	-I stm/cmsis/include-core ^
 	-I stm/cmsis/include-device ^
 	-T stm/STM32F411CEUX_FLASH.ld ^
@@ -10,4 +13,6 @@ arm-none-eabi-gcc ^
 	src/picture.S ^
 	src/main.c ^
 	-o ./bin/firmware.elf
+if errorlevel 1 exit /b 1
 arm-none-eabi-objcopy -O binary ./bin/firmware.elf ./bin/firmware.bin
+arm-none-eabi-size ./bin/firmware.elf

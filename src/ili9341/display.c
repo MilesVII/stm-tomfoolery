@@ -32,7 +32,7 @@ static void initSPI() {
 		SPI_CR1_MSTR |
 		SPI_CR1_SSI  |
 		SPI_CR1_SSM  |
-		0; //BR /2
+		SPI_CR1_BR_0; // APB1 / 4: 10.5 MHz at 84 MHz SYSCLK, the ILI9341 spec limit
 	SPI->CR1 &= ~(SPI_CR1_CPOL | SPI_CR1_CPHA);
 	
 	SPI->CR1 |= SPI_CR1_SPE;
@@ -121,11 +121,15 @@ void display1_init(uint8_t isV) {
 	// command(16, 0xE1, 0x00, 0x16, 0x1B, 0x04, 0x11, 0x07, 0x31, 0x33, 0x42, 0x05, 0x0C, 0x0A, 0x28, 0x2F, 0x0F);
 
 	command(2, 0x3A, 0x55);       // RGB565
-	command(2, 0x36, 0b00001000); // memory access control
+	display1_madctl(DISPLAY1_PORTRAIT);
 
 	reg(0x11); // sleep out
 	delay_ms(120);
 	reg(0x29); // on
+}
+
+void display1_madctl(uint8_t madctl) {
+	command(2, 0x36, madctl); // memory access control
 }
 
 #define HI(v) ((v) >> 8)
