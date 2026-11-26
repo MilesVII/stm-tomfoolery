@@ -26,8 +26,12 @@ void* _sbrk(int incr) {
 // sleep
 volatile uint32_t ticks;
 
+// override in application code to run something every 1 ms
+__attribute__((weak)) void systick_hook(void) {}
+
 void SysTick_Handler(void) {
 	ticks++;
+	systick_hook();
 }
 
 void delay_ms(uint32_t ms) {

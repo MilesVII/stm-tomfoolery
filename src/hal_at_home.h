@@ -75,9 +75,10 @@
 		OTYPER(GPIO##port, pin, 1);\
 	}
 #define DECLARE_GPIO_MOUT(name, port, pin) \
-	static void name##_HIGH() { PIN_SET(GPIO##port, GPIO_PIN(pin)); } \
-	static void name##_LOW()  { PIN_CLR(GPIO##port, GPIO_PIN(pin)); } \
-	static void name##_INIT() { MODER(GPIO##port, pin, 1); name##_HIGH(); }
+	static void name##_HIGH() { PIN_SET(GPIO##port, GPIO_PIN(pin)); MODER(GPIO##port, pin, 1); } \
+	static void name##_LOW()  { PIN_CLR(GPIO##port, GPIO_PIN(pin)); MODER(GPIO##port, pin, 1); } \
+	static void name##_INIT() { MODER(GPIO##port, pin, 1); name##_HIGH(); } \
+	static void name##_FLOAT() { MODER(GPIO##port, pin, 0); }
 #define DECLARE_GPIO_MIN(name, port, pin) \
 	static    void name##_INIT() { PUPDR(GPIO##port, pin, 1); } \
 	static uint8_t name##_READ() { return GPIO##port->IDR & (1 << pin); }
@@ -92,3 +93,10 @@
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; \
 
 void delay_ms(uint32_t ms);
+void systick_hook(void); // weak, called from SysTick_Handler every 1 ms
+
+#define STRUCT(name, fields) \
+	struct name { \
+		fields \
+	}; \
+	typedef struct name name;

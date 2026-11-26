@@ -10,6 +10,7 @@ arm-none-eabi-gcc \
 	-T stm/STM32F411CEUX_FLASH.ld \
 	stm/startup_stm32f411xe-gcc.s \
 	stm/system_stm32f4xx.c src/hal_at_home.c \
+	src/plex.c \
 	src/main.c \
 	-o ./bin/firmware.elf
 arm-none-eabi-objcopy -O binary ./bin/firmware.elf ./bin/firmware.bin
