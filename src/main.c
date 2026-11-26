@@ -31,7 +31,7 @@ int main(void) {
 	L4_INIT(); L4_HIGH();
 	LED_INIT();
 	BUTT_INIT();
-	#define LX(s, n) if (s & 0b0 << n) L##n##_LOW(); else L##n##_HIGH();
+	#define LX(s, n) if (s & 0b1 << n) L##n##_LOW(); else L##n##_HIGH();
 
 	uint8_t s = 0b00000;
 	uint8_t bp = 0;
@@ -44,7 +44,12 @@ int main(void) {
 		LX(s, 3);
 		LX(s, 4);
 		uint8_t bc = !BUTT_READ();
-		if (!bc && bp == 1) {
+		// if (bc) {
+		// 	s = 1;
+		// } else {
+		// 	s = 2;
+		// }
+		if (bc && bp == 0) {
 			++s;
 			if (s >= 32) s = 0;
 		}
